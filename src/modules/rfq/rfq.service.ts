@@ -12,7 +12,7 @@ export class RFQService {
     private configService: ConfigService,
   ) {
     // Initialize email transporter
-    this.transporter = nodemailer.createTransporter({
+    this.transporter = nodemailer.createTransport({
       host: this.configService.get('SMTP_HOST'),
       port: parseInt(this.configService.get('SMTP_PORT', '587')),
       secure: this.configService.get('SMTP_SECURE') === 'true',

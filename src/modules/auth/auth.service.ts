@@ -55,7 +55,7 @@ export class AuthService {
         email,
         password: hashedPassword,
         name,
-        role,
+        role: role as any, // Cast to UserRole enum
       },
     });
 

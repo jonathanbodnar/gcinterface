@@ -48,7 +48,10 @@ export class AdminService {
   }
 
   async listEmailTemplates(type?: string) {
-    const where = type ? { type, active: true } : { active: true };
+    const where: any = { active: true };
+    if (type) {
+      where.type = type as any; // Cast to EmailTemplateType enum
+    }
     return this.prisma.emailTemplate.findMany({ where });
   }
 

@@ -202,7 +202,7 @@ export class QuotesService {
       })),
       lineItems: bomItems.map(bomItem => {
         const quoteItems = quotes
-          .flatMap(q => q.items)
+          .flatMap(q => q.items.map(qi => ({ ...qi, quote: q })))
           .filter(qi => qi.bomItemId === bomItem.id);
 
         return {
@@ -212,7 +212,7 @@ export class QuotesService {
           uom: bomItem.uom,
           quotes: quoteItems.map(qi => ({
             vendorId: qi.quote.vendorId,
-            vendorName: quotes.find(q => q.id === qi.quoteId)?.vendor.name,
+            vendorName: qi.quote.vendor.name,
             unitPrice: qi.unitPrice,
             totalPrice: qi.totalPrice,
           })),
