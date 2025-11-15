@@ -8,15 +8,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { DollarSign, Percent, Users, Mail, Plus, Edit2, Trash2, Upload, Loader2, Save, X } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { DollarSign, Percent, Users, Mail, Plus, Edit2, Upload, Loader2, Save } from 'lucide-react';
 import axios from 'axios';
-import { useAuth } from '../contexts/AuthContext';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 export default function AdminCenter() {
-  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('material-rules');
   
   // Material Rules
