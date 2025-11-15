@@ -10,8 +10,14 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   }
 
   async onModuleInit() {
-    await this.$connect();
-    console.log('✅ GC Interface database connected');
+    try {
+      await this.$connect();
+      console.log('✅ GC Interface database connected');
+    } catch (error) {
+      console.warn('⚠️  Database connection failed:', error.message);
+      console.warn('⚠️  App will continue but database features disabled');
+      // Don't crash the app if database is not available
+    }
   }
 
   async onModuleDestroy() {
