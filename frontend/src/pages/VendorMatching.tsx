@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import axios from 'axios';
 
@@ -7,6 +7,7 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 export default function VendorMatching() {
   const { projectId } = useParams();
+  const navigate = useNavigate();
   const [materialsNeeded, setMaterialsNeeded] = useState<any>({});
   const [vendors, setVendors] = useState<any[]>([]);
   const [selectedVendors, setSelectedVendors] = useState<Set<string>>(new Set());
