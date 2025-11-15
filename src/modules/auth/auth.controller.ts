@@ -1,17 +1,37 @@
 import { Controller, Post, Body, UseGuards, Request, UnauthorizedException } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiProperty } from '@nestjs/swagger';
+import { IsEmail, IsString, IsOptional, MinLength } from 'class-validator';
 import { AuthService } from './auth.service';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 
 class LoginDto {
+  @ApiProperty({ example: 'user@example.com' })
+  @IsEmail()
   email: string;
+
+  @ApiProperty({ example: 'password123' })
+  @IsString()
+  @MinLength(6)
   password: string;
 }
 
 class RegisterDto {
+  @ApiProperty({ example: 'user@example.com' })
+  @IsEmail()
   email: string;
+
+  @ApiProperty({ example: 'password123' })
+  @IsString()
+  @MinLength(6)
   password: string;
+
+  @ApiProperty({ example: 'John Doe' })
+  @IsString()
   name: string;
+
+  @ApiProperty({ example: 'ESTIMATOR', required: false })
+  @IsOptional()
+  @IsString()
   role?: string;
 }
 
