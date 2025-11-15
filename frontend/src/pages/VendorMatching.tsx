@@ -5,7 +5,7 @@ import axios from 'axios';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Users, Package, CheckCircle2, XCircle, Loader2, ArrowLeft, Mail, Phone, Star, Wrench, Zap, Droplet, Building } from 'lucide-react';
+import { Users, Package, CheckCircle2, Loader2, ArrowLeft, Mail, Phone, Star, Wrench, Zap, Droplet, Building } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';

@@ -1,6 +1,6 @@
 import Layout from '../components/Layout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Settings, DollarSign, Percent, Users, Mail } from 'lucide-react';
+import { DollarSign, Percent, Users, Mail } from 'lucide-react';
 
 export default function AdminCenter() {
   const adminSections = [
