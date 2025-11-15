@@ -89,7 +89,7 @@ export default function Projects() {
           </div>
         </div>
 
-        {error && (
+        {error && error.trim() && (
           <div className="flex items-center gap-2 p-3 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-md">
             <AlertCircle className="w-4 h-4" />
             <span>{error}</span>
@@ -131,9 +131,12 @@ export default function Projects() {
                 ) : availableJobs.length === 0 ? (
                   <div className="text-center py-12">
                     <Layers className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
-                    <p className="text-muted-foreground mb-2">No available takeoff jobs found</p>
-                    <p className="text-sm text-muted-foreground">
-                      {error || 'Takeoff database may not be configured or no completed jobs exist'}
+                    <p className="text-lg font-medium text-muted-foreground mb-2">No Takeoff Jobs Available</p>
+                    <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                      The takeoff database connection is not configured yet. Set the <code className="px-1 py-0.5 bg-muted rounded text-xs">TAKEOFF_DATABASE_URL</code> environment variable to connect to your existing takeoff system.
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-4">
+                      For now, you can manually create projects or configure the takeoff database connection in Railway.
                     </p>
                   </div>
                 ) : (
