@@ -11,22 +11,31 @@ export class AuthService {
   ) {}
 
   async validateUser(email: string, password: string): Promise<any> {
-    const user = await this.prisma.user.findUnique({
-      where: { email },
-    });
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { email },
+      });
 
-    if (!user) {
+      if (!user) {
+        return null;
+      }
+
+      if (!user.active) {
+        return null;
+      }
+
+      const isPasswordValid = await bcrypt.compare(password, user.password);
+      
+      if (!isPasswordValid) {
+        return null;
+      }
+
+      const { password: _, ...result } = user;
+      return result;
+    } catch (error) {
+      console.error('Error validating user:', error);
       return null;
     }
-
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    
-    if (!isPasswordValid) {
-      return null;
-    }
-
-    const { password: _, ...result } = user;
-    return result;
   }
 
   async login(user: any) {
