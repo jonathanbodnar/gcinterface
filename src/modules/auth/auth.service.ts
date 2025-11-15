@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, InternalServerErrorException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { UserRole } from '@prisma/client';
@@ -58,19 +58,42 @@ export class AuthService {
   }
 
   async register(email: string, password: string, name: string, role: string = 'ESTIMATOR') {
-    const hashedPassword = await bcrypt.hash(password, 10);
+    try {
+      const hashedPassword = await bcrypt.hash(password, 10);
 
-    const user = await this.prisma.user.create({
-      data: {
-        email,
-        password: hashedPassword,
-        name,
-        role: role as any, // Cast to UserRole enum
-      },
-    });
+      // Validate role
+      const validRoles = ['ADMIN', 'PRECONSTRUCTION_MANAGER', 'ESTIMATOR', 'PROCUREMENT_BUYER', 'EXECUTIVE'];
+      const userRole = validRoles.includes(role?.toUpperCase()) 
+        ? (role.toUpperCase() as UserRole) 
+        : UserRole.ESTIMATOR;
 
-    const { password: _, ...result } = user;
-    return result;
+      const user = await this.prisma.user.create({
+        data: {
+          email,
+          password: hashedPassword,
+          name,
+          role: userRole,
+        },
+      });
+
+      const { password: _, ...result } = user;
+      return result;
+    } catch (error) {
+      console.error('Registration error:', error);
+      
+      // Check if it's a database connection/schema issue
+      if (error.code === 'P2002') {
+        throw new UnauthorizedException('Email already exists');
+      }
+      
+      if (error.message?.includes('table') || error.message?.includes('does not exist')) {
+        throw new InternalServerErrorException(
+          'Database tables not initialized. Please run: npx prisma migrate deploy'
+        );
+      }
+      
+      throw new InternalServerErrorException(`Registration failed: ${error.message}`);
+    }
   }
 
   async validateToken(token: string) {
@@ -146,7 +169,7 @@ export class AuthService {
       };
     } catch (error) {
       console.error('❌ Error seeding test accounts:', error);
-      throw new Error(`Failed to seed accounts: ${error.message}`);
+      throw new InternalServerErrorException(`Failed to seed accounts: ${error.message}`);
     }
   }
 }
