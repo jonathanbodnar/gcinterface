@@ -8,6 +8,8 @@ import { RFQModule } from './modules/rfq/rfq.module';
 import { QuotesModule } from './modules/quotes/quotes.module';
 import { SubcontractsModule } from './modules/subcontracts/subcontracts.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { BOMModule } from './modules/bom/bom.module';
+import { LaborModule } from './modules/labor/labor.module';
 
 @Module({
   imports: [
@@ -17,6 +19,8 @@ import { AdminModule } from './modules/admin/admin.module';
     PrismaModule,
     AuthModule,
     ProjectsModule,
+    BOMModule,
+    LaborModule,
     VendorsModule,
     RFQModule,
     QuotesModule,
