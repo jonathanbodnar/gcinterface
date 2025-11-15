@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import axios from 'axios';
@@ -16,7 +16,7 @@ export default function Projects() {
     
     setLoading(true);
     try {
-      const response = await axios.post(`${API_URL}/projects/import/${importJobId}`);
+      await axios.post(`${API_URL}/projects/import/${importJobId}`);
       alert('Project imported successfully!');
       setImportJobId('');
       loadProjects();

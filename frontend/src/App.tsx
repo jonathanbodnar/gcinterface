@@ -8,11 +8,12 @@ import VendorMatching from './pages/VendorMatching';
 import RFQManagement from './pages/RFQManagement';
 import QuoteComparison from './pages/QuoteComparison';
 import AdminCenter from './pages/AdminCenter';
+import type { ReactNode } from 'react';
 import './App.css';
 
 const queryClient = new QueryClient();
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
+function ProtectedRoute({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   
   if (!user) {
