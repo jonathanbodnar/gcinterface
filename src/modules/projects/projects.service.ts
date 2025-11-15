@@ -108,4 +108,53 @@ export class ProjectsService {
       },
     });
   }
+
+  async listAvailableTakeoffJobs() {
+    // Fetch list of available jobs from takeoff database
+    if (!this.takeoffPrisma.client) {
+      return {
+        jobs: [],
+        message: 'Takeoff database not configured',
+      };
+    }
+
+    try {
+      const jobs = await this.takeoffPrisma.$queryRaw`
+        SELECT 
+          id, 
+          filename,
+          status,
+          "createdAt",
+          "totalArea"
+        FROM "Job"
+        WHERE status = 'COMPLETED'
+        ORDER BY "createdAt" DESC
+        LIMIT 50
+      `;
+
+      // Get already imported job IDs
+      const importedProjects = await this.prisma.project.findMany({
+        select: { takeoffJobId: true },
+      });
+      const importedJobIds = new Set(importedProjects.map(p => p.takeoffJobId));
+
+      // Mark jobs as imported
+      const jobsWithStatus = jobs.map((job: any) => ({
+        ...job,
+        isImported: importedJobIds.has(job.id),
+      }));
+
+      return {
+        jobs: jobsWithStatus,
+        total: jobs.length,
+      };
+    } catch (error) {
+      console.error('Error fetching takeoff jobs:', error);
+      return {
+        jobs: [],
+        message: 'Failed to fetch takeoff jobs',
+        error: error.message,
+      };
+    }
+  }
 }

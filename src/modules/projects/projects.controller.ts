@@ -16,6 +16,12 @@ export class ProjectsController {
     return this.projectsService.importFromTakeoff(takeoffJobId, req.user.userId);
   }
 
+  @Get('available-takeoff-jobs')
+  @ApiOperation({ summary: 'List available takeoff jobs for import' })
+  async listAvailableTakeoffJobs() {
+    return this.projectsService.listAvailableTakeoffJobs();
+  }
+
   @Get()
   @ApiOperation({ summary: 'List all projects' })
   async listProjects(@Request() req) {
