@@ -1,0 +1,450 @@
+// GC Interface Database Schema - Post-Takeoff Estimation & Procurement SaaS
+// Connects to existing takeoff database (READ ONLY) and new gcinterface database
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// USER MANAGEMENT & AUTHENTICATION
+// ============================================================================
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  role      UserRole @default(ESTIMATOR)
+  password  String // Hashed
+  active    Boolean  @default(true)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  projects      Project[]
+  estimates     Estimate[]
+  rfqsSent      RFQ[]
+  awardsIssued  Subcontract[]
+
+  @@map("users")
+}
+
+enum UserRole {
+  ADMIN
+  PRECONSTRUCTION_MANAGER
+  ESTIMATOR
+  PROCUREMENT_BUYER
+  EXECUTIVE
+}
+
+// ============================================================================
+// PROJECTS (Links to Takeoff Jobs)
+// ============================================================================
+
+model Project {
+  id          String  @id @default(cuid())
+  name        String
+  location    String
+  clientName  String?
+  totalSF     Float?
+  
+  // Link to takeoff database job
+  takeoffJobId String  @unique // Job ID from gclegacy takeoff database
+  
+  // Project details
+  planDate    DateTime?
+  bidDate     DateTime?
+  status      ProjectStatus @default(SCOPE_DIAGNOSIS)
+  
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  createdBy     User          @relation(fields: [createdById], references: [id])
+  estimates     Estimate[]
+  boms          BOM[]
+  rfqs          RFQ[]
+  quotes        Quote[]
+  subcontracts  Subcontract[]
+
+  @@map("projects")
+}
+
+enum ProjectStatus {
+  SCOPE_DIAGNOSIS
+  BOM_GENERATION
+  VENDOR_MATCHING
+  RFQ_SENT
+  QUOTE_COMPARISON
+  AWARD_PENDING
+  AWARDED
+  CANCELLED
+}
+
+// ============================================================================
+// ESTIMATES & BOM
+// ============================================================================
+
+model Estimate {
+  id          String  @id @default(cuid())
+  projectId   String
+  version     String  @default("1.0")
+  status      EstimateStatus @default(DRAFT)
+  
+  // Totals
+  materialCost  Float   @default(0)
+  laborCost     Float   @default(0)
+  equipmentCost Float   @default(0)
+  subtotal      Float   @default(0)
+  markup        Float   @default(0) // Percentage
+  contingency   Float   @default(0) // Percentage
+  totalCost     Float   @default(0)
+  
+  // Confidence
+  confidenceScore Float? // 0-100%
+  riskScore       Float? // 0-100%
+  
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy   User      @relation(fields: [createdById], references: [id])
+  bomItems    BOM[]
+
+  @@map("estimates")
+}
+
+enum EstimateStatus {
+  DRAFT
+  UNDER_REVIEW
+  APPROVED
+  AWARDED
+  REJECTED
+}
+
+model BOM {
+  id          String  @id @default(cuid())
+  projectId   String
+  estimateId  String?
+  
+  // Item details
+  csiDivision String? // CSI division code
+  category    String  // Flooring, Plumbing, HVAC, etc.
+  description String
+  sku         String?
+  
+  // Quantities
+  quantity    Float
+  uom         String // Unit of measure
+  wasteFactor Float   @default(0) // Percentage
+  finalQty    Float // quantity * (1 + wasteFactor)
+  
+  // Costs
+  unitCost    Float?
+  laborHours  Float?
+  laborRate   Float?
+  totalCost   Float?
+  
+  // Metadata
+  confidence  Float?  // Confidence score 0-100%
+  source      String? // Extracted from takeoff, manual, AI-generated
+  notes       String?
+  
+  // Alternates/VE
+  hasAlternate Boolean @default(false)
+  alternates   Json? // Array of alternate options
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  estimate    Estimate?  @relation(fields: [estimateId], references: [id])
+  rfqItems    RFQItem[]
+  quoteItems  QuoteItem[]
+
+  @@map("bom_items")
+}
+
+// ============================================================================
+// VENDOR & SUBCONTRACTOR MANAGEMENT
+// ============================================================================
+
+model Vendor {
+  id          String  @id @default(cuid())
+  name        String
+  type        VendorType
+  
+  // Contact info
+  email       String
+  phone       String?
+  address     String?
+  city        String?
+  state       String?
+  zipCode     String?
+  
+  // Location for proximity
+  latitude    Float?
+  longitude   Float?
+  
+  // Trade specialties
+  trades      String[] // M, E, P, etc.
+  materials   String[] // Types of materials they supply
+  
+  // Performance
+  rating      Float?   @default(0)
+  reliability Float?   @default(0)
+  
+  active      Boolean  @default(true)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  rfqs        RFQ[]
+  quotes      Quote[]
+  subcontracts Subcontract[]
+
+  @@map("vendors")
+}
+
+enum VendorType {
+  MATERIAL_SUPPLIER
+  SUBCONTRACTOR
+  BOTH
+}
+
+// ============================================================================
+// RFQ (Request for Quote) SYSTEM
+// ============================================================================
+
+model RFQ {
+  id          String  @id @default(cuid())
+  projectId   String
+  vendorId    String
+  
+  // RFQ details
+  rfqNumber   String  @unique
+  subject     String
+  dueDate     DateTime?
+  
+  // Email info
+  sentAt      DateTime?
+  sentBy      String?
+  emailBody   String?
+  
+  status      RFQStatus @default(DRAFT)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  vendor      Vendor    @relation(fields: [vendorId], references: [id])
+  sentByUser  User?     @relation(fields: [sentBy], references: [id])
+  items       RFQItem[]
+  quote       Quote?
+
+  @@map("rfqs")
+}
+
+enum RFQStatus {
+  DRAFT
+  SENT
+  RESPONDED
+  EXPIRED
+  CANCELLED
+}
+
+model RFQItem {
+  id          String  @id @default(cuid())
+  rfqId       String
+  bomItemId   String
+  
+  quantity    Float
+  uom         String
+  description String
+  
+  createdAt   DateTime @default(now())
+
+  // Relations
+  rfq         RFQ @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  bomItem     BOM @relation(fields: [bomItemId], references: [id])
+
+  @@map("rfq_items")
+}
+
+// ============================================================================
+// QUOTE MANAGEMENT & COMPARISON
+// ============================================================================
+
+model Quote {
+  id          String  @id @default(cuid())
+  projectId   String
+  vendorId    String
+  rfqId       String  @unique
+  
+  // Quote details
+  quoteNumber String?
+  totalAmount Float
+  validUntil  DateTime?
+  
+  // VE alternatives
+  hasVE       Boolean @default(false)
+  veNotes     String?
+  
+  status      QuoteStatus @default(RECEIVED)
+  
+  receivedAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  vendor      Vendor      @relation(fields: [vendorId], references: [id])
+  rfq         RFQ         @relation(fields: [rfqId], references: [id])
+  items       QuoteItem[]
+
+  @@map("quotes")
+}
+
+enum QuoteStatus {
+  RECEIVED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  AWARDED
+}
+
+model QuoteItem {
+  id          String  @id @default(cuid())
+  quoteId     String
+  bomItemId   String
+  
+  description String
+  quantity    Float
+  uom         String
+  unitPrice   Float
+  totalPrice  Float
+  
+  // VE alternate
+  isAlternate Boolean @default(false)
+  alternateFor String?
+  
+  notes       String?
+  
+  createdAt   DateTime @default(now())
+
+  // Relations
+  quote       Quote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  bomItem     BOM   @relation(fields: [bomItemId], references: [id])
+
+  @@map("quote_items")
+}
+
+// ============================================================================
+// SUBCONTRACT & AWARD MANAGEMENT
+// ============================================================================
+
+model Subcontract {
+  id          String  @id @default(cuid())
+  projectId   String
+  vendorId    String
+  
+  trade       String // M, E, P, etc.
+  contractNumber String @unique
+  
+  // Scope
+  scopeOfWork String
+  materials   Json // Array of included materials
+  schedule    Json? // Gantt chart data
+  
+  // Pricing
+  contractAmount Float
+  paymentTerms   String?
+  
+  // Status
+  status      SubcontractStatus @default(DRAFT)
+  awardedAt   DateTime?
+  awardedBy   String?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  vendor      Vendor  @relation(fields: [vendorId], references: [id])
+  awardedByUser User? @relation(fields: [awardedBy], references: [id])
+
+  @@map("subcontracts")
+}
+
+enum SubcontractStatus {
+  DRAFT
+  SENT_FOR_REVIEW
+  AWARDED
+  DECLINED
+  CANCELLED
+}
+
+// ============================================================================
+// ADMIN CONFIGURATION
+// ============================================================================
+
+model MaterialRule {
+  id          String  @id @default(cuid())
+  trade       String // M, E, P, A
+  material    String
+  costPerUnit Float
+  laborPerUnit Float?
+  uom         String
+  
+  active      Boolean @default(true)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("material_rules")
+}
+
+model TradeMarkup {
+  id          String  @id @default(cuid())
+  trade       String  @unique // M, E, P, A
+  markup      Float // Percentage
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("trade_markups")
+}
+
+model EmailTemplate {
+  id          String  @id @default(cuid())
+  name        String
+  type        EmailTemplateType
+  subject     String
+  body        String // HTML template with variables
+  
+  active      Boolean @default(true)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("email_templates")
+}
+
+enum EmailTemplateType {
+  RFQ
+  AWARD
+  NON_AWARD
+  CLARIFICATION
+}
+
