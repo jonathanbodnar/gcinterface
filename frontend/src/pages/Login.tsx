@@ -25,6 +25,22 @@ export default function Login() {
     }
   };
 
+  const handleQuickLogin = async (testEmail: string, testPassword: string) => {
+    setEmail(testEmail);
+    setPassword(testPassword);
+    setError('');
+    setLoading(true);
+
+    try {
+      await login(testEmail, testPassword);
+      navigate('/');
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Login failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f9fafb' }}>
       <div style={{ maxWidth: '400px', width: '100%', padding: '20px' }}>
@@ -108,6 +124,104 @@ export default function Login() {
               {loading ? 'Signing in...' : 'Sign In'}
             </button>
           </form>
+
+          {/* Test Accounts Section */}
+          <div style={{ marginTop: '32px', paddingTop: '24px', borderTop: '1px solid #e5e7eb' }}>
+            <p style={{ 
+              fontSize: '12px', 
+              color: '#6b7280', 
+              textAlign: 'center', 
+              marginBottom: '16px',
+              fontWeight: '500',
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px',
+            }}>
+              Test Accounts
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <button
+                type="button"
+                onClick={() => handleQuickLogin('admin@test.com', 'admin123')}
+                disabled={loading}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  backgroundColor: '#dc2626',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  fontWeight: '500',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  opacity: loading ? 0.7 : 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                }}
+              >
+                <span>👤</span>
+                <span>Login as Admin</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleQuickLogin('user@test.com', 'user123')}
+                disabled={loading}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  backgroundColor: '#2563eb',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  fontWeight: '500',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  opacity: loading ? 0.7 : 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                }}
+              >
+                <span>👤</span>
+                <span>Login as Estimator</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleQuickLogin('pm@test.com', 'pm123')}
+                disabled={loading}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  backgroundColor: '#7c3aed',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  fontWeight: '500',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  opacity: loading ? 0.7 : 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                }}
+              >
+                <span>👤</span>
+                <span>Login as Preconstruction Manager</span>
+              </button>
+            </div>
+            <p style={{ 
+              fontSize: '11px', 
+              color: '#9ca3af', 
+              textAlign: 'center', 
+              marginTop: '12px',
+              fontStyle: 'italic',
+            }}>
+              Quick login for testing purposes
+            </p>
+          </div>
         </div>
       </div>
     </div>
