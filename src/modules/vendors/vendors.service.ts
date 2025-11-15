@@ -14,15 +14,18 @@ export class VendorsService {
       where: { id: projectId },
     });
 
-    const takeoffJob = await this.takeoffPrisma.job.findUnique({
-      where: { id: project.takeoffJobId },
-      include: {
-        materials: true,
-      },
+    if (!project) {
+      throw new Error('Project not found');
+    }
+
+    // Get materials from BOM (gcinterface database) instead of takeoff
+    // The BOM should already be populated from takeoff import
+    const bomItems = await this.prisma.bOM.findMany({
+      where: { projectId },
     });
 
     // Get materials grouped by trade
-    const materialsByTrade = this.groupMaterialsByTrade(takeoffJob.materials);
+    const materialsByTrade = this.groupMaterialsByTrade(bomItems);
 
     // Get vendors by trade and proximity
     const vendors = await this.getVendorsByProximity(project.location, materialsByTrade);
@@ -43,8 +46,8 @@ export class VendorsService {
     };
 
     for (const material of materials) {
-      // Determine trade based on SKU or category
-      const trade = this.identifyTrade(material.sku);
+      // Determine trade based on SKU, category, or CSI division
+      const trade = this.identifyTrade(material.sku || material.description || material.category);
       if (groups[trade]) {
         groups[trade].push(material);
       } else {
