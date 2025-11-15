@@ -190,3 +190,4 @@ import { PrismaClient as TakeoffPrismaClient } from './generated/takeoff-client'
 
 Copyright (c) 2025 GC Legacy Construction. All rights reserved.
 
+

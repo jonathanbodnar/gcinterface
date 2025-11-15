@@ -25,3 +25,4 @@ export class RFQController {
     return this.rfqService.sendRFQ(id);
   }
 }
+

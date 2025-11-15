@@ -16,3 +16,4 @@ export class LaborController {
     return this.laborCalculation.calculateLabor(projectId);
   }
 }
+

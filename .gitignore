@@ -45,3 +45,4 @@ prisma/migrations/dev.db*
 
 # Reference files (large PDFs)
 reference/*.pdf
+

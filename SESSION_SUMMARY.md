@@ -134,3 +134,4 @@ Location: `/Users/jonathanbodnar/gcinterface/reference/`
 **Goal:** Complete post-takeoff estimation workflow
 
 All foundation work is complete - ready to build the full application!
+

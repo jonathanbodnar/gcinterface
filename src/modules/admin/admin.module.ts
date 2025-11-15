@@ -8,3 +8,4 @@ import { AdminController } from './admin.controller';
   exports: [AdminService],
 })
 export class AdminModule {}
+

@@ -8,3 +8,4 @@ import { BOMController } from './bom.controller';
   exports: [BOMGeneratorService],
 })
 export class BOMModule {}
+

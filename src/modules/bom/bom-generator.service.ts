@@ -312,3 +312,4 @@ export class BOMGeneratorService {
     return estimates[category]?.[uom] || 10.00;
   }
 }
+

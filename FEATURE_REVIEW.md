@@ -424,3 +424,4 @@ The following workflow is **fully functional** right now:
 
 **The system is deployable and functional, but requires manual BOM entry until auto-generation services are added.**
 
+

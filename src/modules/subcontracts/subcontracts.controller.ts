@@ -30,3 +30,4 @@ export class SubcontractsController {
     return this.subcontractsService.awardSubcontract(id, req.user.userId);
   }
 }
+

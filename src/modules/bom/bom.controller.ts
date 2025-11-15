@@ -16,3 +16,4 @@ export class BOMController {
     return this.bomGenerator.generateFromTakeoff(projectId, req.user.userId);
   }
 }
+

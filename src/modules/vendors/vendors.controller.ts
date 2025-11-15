@@ -34,3 +34,4 @@ export class VendorsController {
     return this.vendorsService.bulkImportVendors(vendorsData);
   }
 }
+

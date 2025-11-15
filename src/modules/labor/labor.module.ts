@@ -8,3 +8,4 @@ import { LaborController } from './labor.controller';
   exports: [LaborCalculationService],
 })
 export class LaborModule {}
+

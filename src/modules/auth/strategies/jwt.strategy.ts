@@ -6,11 +6,17 @@ import { ConfigService } from '@nestjs/config';
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(private configService: ConfigService) {
+    const jwtSecret = configService.get('JWT_SECRET') || 'default-secret-change-in-production';
+    
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: configService.get('JWT_SECRET'),
+      secretOrKey: jwtSecret,
     });
+    
+    if (!configService.get('JWT_SECRET')) {
+      console.warn('⚠️  JWT_SECRET not set - using default secret (INSECURE)');
+    }
   }
 
   async validate(payload: any) {
@@ -21,3 +27,4 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     };
   }
 }
+
