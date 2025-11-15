@@ -1,6 +1,11 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Building2, User, Shield, AlertCircle } from 'lucide-react';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -41,210 +46,97 @@ export default function Login() {
     }
   };
 
-  return (
-    <div style={{ 
-      minHeight: '100vh', 
-      display: 'flex', 
-      alignItems: 'center', 
-      justifyContent: 'center', 
-      backgroundColor: '#f9fafb',
-      padding: '20px',
-    }}>
-      <div style={{ 
-        maxWidth: '400px', 
-        width: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-      }}>
-        <div style={{ 
-          background: 'white', 
-          padding: '40px', 
-          borderRadius: '8px', 
-          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-          width: '100%',
-        }}>
-          <h1 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '8px', textAlign: 'center' }}>
-            GC Interface
-          </h1>
-          <p style={{ color: '#6b7280', textAlign: 'center', marginBottom: '32px' }}>
-            Post-Takeoff Estimation & Procurement
-          </p>
+  const testAccounts = [
+    { email: 'admin@test.com', password: 'admin123', label: 'Admin', icon: Shield, variant: 'destructive' as const },
+    { email: 'user@test.com', password: 'user123', label: 'Estimator', icon: User, variant: 'default' as const },
+    { email: 'pm@test.com', password: 'pm123', label: 'Preconstruction Manager', icon: Building2, variant: 'secondary' as const },
+  ];
 
-          <form onSubmit={handleSubmit}>
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500' }}>
-                Email
-              </label>
-              <input
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 p-4">
+      <Card className="w-full max-w-md shadow-xl">
+        <CardHeader className="space-y-1 text-center">
+          <div className="flex justify-center mb-4">
+            <div className="w-16 h-16 bg-primary rounded-xl flex items-center justify-center">
+              <Building2 className="w-8 h-8 text-primary-foreground" />
+            </div>
+          </div>
+          <CardTitle className="text-3xl font-bold">GC Interface</CardTitle>
+          <CardDescription className="text-base">
+            Post-Takeoff Estimation & Procurement
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {error && (
+              <div className="flex items-center gap-2 p-3 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-md">
+                <AlertCircle className="w-4 h-4" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
                 type="email"
+                placeholder="you@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 autoComplete="email"
                 required
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '6px',
-                  fontSize: '14px',
-                }}
+                disabled={loading}
               />
             </div>
 
-            <div style={{ marginBottom: '24px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500' }}>
-                Password
-              </label>
-              <input
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
                 type="password"
+                placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete="current-password"
                 required
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '6px',
-                  fontSize: '14px',
-                }}
+                disabled={loading}
               />
             </div>
 
-            {error && (
-              <div style={{
-                padding: '12px',
-                backgroundColor: '#fee2e2',
-                border: '1px solid #fecaca',
-                borderRadius: '6px',
-                marginBottom: '20px',
-                color: '#991b1b',
-                fontSize: '14px',
-              }}>
-                {error}
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={loading}
-              style={{
-                width: '100%',
-                padding: '12px',
-                backgroundColor: '#2563eb',
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                fontSize: '14px',
-                fontWeight: '500',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                opacity: loading ? 0.7 : 1,
-              }}
-            >
+            <Button type="submit" className="w-full" size="lg" disabled={loading}>
               {loading ? 'Signing in...' : 'Sign In'}
-            </button>
+            </Button>
           </form>
-
-          {/* Test Accounts Section */}
-          <div style={{ marginTop: '32px', paddingTop: '24px', borderTop: '1px solid #e5e7eb' }}>
-            <p style={{ 
-              fontSize: '12px', 
-              color: '#6b7280', 
-              textAlign: 'center', 
-              marginBottom: '16px',
-              fontWeight: '500',
-              textTransform: 'uppercase',
-              letterSpacing: '0.5px',
-            }}>
+        </CardContent>
+        <CardFooter className="flex flex-col space-y-4">
+          <div className="w-full border-t pt-4">
+            <p className="text-xs font-medium text-muted-foreground text-center mb-4 uppercase tracking-wider">
               Test Accounts
             </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <button
-                type="button"
-                onClick={() => handleQuickLogin('admin@test.com', 'admin123')}
-                disabled={loading}
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  backgroundColor: '#dc2626',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  fontSize: '13px',
-                  fontWeight: '500',
-                  cursor: loading ? 'not-allowed' : 'pointer',
-                  opacity: loading ? 0.7 : 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                }}
-              >
-                <span>👤</span>
-                <span>Login as Admin</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickLogin('user@test.com', 'user123')}
-                disabled={loading}
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  backgroundColor: '#2563eb',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  fontSize: '13px',
-                  fontWeight: '500',
-                  cursor: loading ? 'not-allowed' : 'pointer',
-                  opacity: loading ? 0.7 : 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                }}
-              >
-                <span>👤</span>
-                <span>Login as Estimator</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickLogin('pm@test.com', 'pm123')}
-                disabled={loading}
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  backgroundColor: '#7c3aed',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  fontSize: '13px',
-                  fontWeight: '500',
-                  cursor: loading ? 'not-allowed' : 'pointer',
-                  opacity: loading ? 0.7 : 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                }}
-              >
-                <span>👤</span>
-                <span>Login as Preconstruction Manager</span>
-              </button>
+            <div className="space-y-2">
+              {testAccounts.map((account) => {
+                const Icon = account.icon;
+                return (
+                  <Button
+                    key={account.email}
+                    type="button"
+                    variant={account.variant}
+                    className="w-full justify-start"
+                    onClick={() => handleQuickLogin(account.email, account.password)}
+                    disabled={loading}
+                  >
+                    <Icon className="w-4 h-4 mr-2" />
+                    Login as {account.label}
+                  </Button>
+                );
+              })}
             </div>
-            <p style={{ 
-              fontSize: '11px', 
-              color: '#9ca3af', 
-              textAlign: 'center', 
-              marginTop: '12px',
-              fontStyle: 'italic',
-            }}>
+            <p className="text-xs text-muted-foreground text-center mt-4 italic">
               Quick login for testing purposes
             </p>
           </div>
-        </div>
-      </div>
+        </CardFooter>
+      </Card>
     </div>
   );
 }

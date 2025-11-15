@@ -2,37 +2,47 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import axios from 'axios';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { FolderKanban, Upload, Search, Users, FileText, Loader2, AlertCircle } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 export default function Projects() {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [importLoading, setImportLoading] = useState(false);
   const [importJobId, setImportJobId] = useState('');
+  const [error, setError] = useState('');
   const navigate = useNavigate();
 
   const handleImportProject = async () => {
     if (!importJobId) return;
     
-    setLoading(true);
+    setImportLoading(true);
+    setError('');
     try {
       await axios.post(`${API_URL}/projects/import/${importJobId}`);
-      alert('Project imported successfully!');
       setImportJobId('');
       loadProjects();
-    } catch (error: any) {
-      alert(error.response?.data?.message || 'Import failed');
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Import failed');
     } finally {
-      setLoading(false);
+      setImportLoading(false);
     }
   };
 
   const loadProjects = async () => {
+    setLoading(true);
     try {
       const response = await axios.get(`${API_URL}/projects`);
       setProjects(response.data);
-    } catch (error) {
-      console.error('Failed to load projects:', error);
+    } catch (err) {
+      console.error('Failed to load projects:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -42,118 +52,140 @@ export default function Projects() {
 
   return (
     <Layout>
-      <div style={{ padding: '32px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-          <h1 style={{ fontSize: '24px', fontWeight: 'bold' }}>Projects</h1>
-        </div>
-
-        {/* Import Section */}
-        <div className="card" style={{ padding: '24px', marginBottom: '24px' }}>
-          <h2 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '16px' }}>
-            Import Project from Takeoff
-          </h2>
-          <div style={{ display: 'flex', gap: '12px' }}>
-            <input
-              type="text"
-              placeholder="Takeoff Job ID"
-              value={importJobId}
-              onChange={(e) => setImportJobId(e.target.value)}
-              style={{
-                flex: 1,
-                padding: '10px 12px',
-                border: '1px solid #d1d5db',
-                borderRadius: '6px',
-              }}
-            />
-            <button
-              onClick={handleImportProject}
-              disabled={loading || !importJobId}
-              style={{
-                padding: '10px 24px',
-                backgroundColor: '#2563eb',
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                opacity: loading || !importJobId ? 0.5 : 1,
-              }}
-            >
-              {loading ? 'Importing...' : 'Import Project'}
-            </button>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-4xl font-bold tracking-tight">Projects</h1>
+            <p className="text-muted-foreground mt-2">Manage your construction projects</p>
           </div>
         </div>
 
-        {/* Projects List */}
-        <div className="card" style={{ padding: '24px' }}>
-          <h2 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '16px' }}>
-            Your Projects
-          </h2>
-          
-          {projects.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>
-              <p>No projects yet. Import a project from takeoff to get started.</p>
+        {/* Import Section */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Upload className="w-5 h-5" />
+              <CardTitle>Import Project from Takeoff</CardTitle>
             </div>
-          ) : (
-            <table>
-              <thead>
-                <tr>
-                  <th>Project Name</th>
-                  <th>Location</th>
-                  <th>Status</th>
-                  <th>Total SF</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
+            <CardDescription>
+              Import a project from the takeoff system using the job ID
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {error && (
+              <div className="flex items-center gap-2 p-3 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-md">
+                <AlertCircle className="w-4 h-4" />
+                <span>{error}</span>
+              </div>
+            )}
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <Label htmlFor="jobId">Takeoff Job ID</Label>
+                <Input
+                  id="jobId"
+                  placeholder="Enter job ID"
+                  value={importJobId}
+                  onChange={(e) => setImportJobId(e.target.value)}
+                  disabled={importLoading}
+                />
+              </div>
+              <div className="flex items-end">
+                <Button
+                  onClick={handleImportProject}
+                  disabled={importLoading || !importJobId}
+                >
+                  {importLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Importing...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-4 h-4 mr-2" />
+                      Import
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Projects List */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <FolderKanban className="w-5 h-5" />
+              <CardTitle>Your Projects</CardTitle>
+            </div>
+            <CardDescription>
+              {projects.length === 0 ? 'No projects yet' : `${projects.length} project${projects.length !== 1 ? 's' : ''} found`}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : projects.length === 0 ? (
+              <div className="text-center py-12">
+                <FolderKanban className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
+                <p className="text-muted-foreground mb-4">No projects yet. Import a project from takeoff to get started.</p>
+                <Button variant="outline" onClick={() => document.getElementById('jobId')?.focus()}>
+                  <Upload className="w-4 h-4 mr-2" />
+                  Import Your First Project
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-4">
                 {projects.map((project: any) => (
-                  <tr key={project.id}>
-                    <td>{project.name}</td>
-                    <td>{project.location}</td>
-                    <td>
-                      <span style={{
-                        padding: '4px 12px',
-                        backgroundColor: '#dbeafe',
-                        color: '#1e40af',
-                        borderRadius: '12px',
-                        fontSize: '12px',
-                      }}>
-                        {project.status}
-                      </span>
-                    </td>
-                    <td>{project.totalSF?.toFixed(0) || '-'} SF</td>
-                    <td>
-                      <button
-                        onClick={() => navigate(`/vendor-matching/${project.id}`)}
-                        style={{
-                          padding: '6px 12px',
-                          backgroundColor: '#f3f4f6',
-                          border: '1px solid #d1d5db',
-                          borderRadius: '4px',
-                          fontSize: '13px',
-                          marginRight: '8px',
-                        }}
-                      >
-                        Match Vendors
-                      </button>
-                      <button
-                        onClick={() => navigate(`/rfq/${project.id}`)}
-                        style={{
-                          padding: '6px 12px',
-                          backgroundColor: '#f3f4f6',
-                          border: '1px solid #d1d5db',
-                          borderRadius: '4px',
-                          fontSize: '13px',
-                        }}
-                      >
-                        Manage RFQs
-                      </button>
-                    </td>
-                  </tr>
+                  <Card key={project.id} className="hover:shadow-md transition-shadow">
+                    <CardContent className="p-6">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <h3 className="text-lg font-semibold mb-1">{project.name || 'Unnamed Project'}</h3>
+                          <div className="flex items-center gap-4 text-sm text-muted-foreground mb-3">
+                            <span className="flex items-center gap-1">
+                              <Search className="w-4 h-4" />
+                              {project.location || 'No location'}
+                            </span>
+                            {project.totalSF && (
+                              <span className="flex items-center gap-1">
+                                <FileText className="w-4 h-4" />
+                                {project.totalSF.toFixed(0)} SF
+                              </span>
+                            )}
+                          </div>
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
+                            {project.status || 'ACTIVE'}
+                          </span>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => navigate(`/vendor-matching/${project.id}`)}
+                          >
+                            <Users className="w-4 h-4 mr-2" />
+                            Match Vendors
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => navigate(`/rfq/${project.id}`)}
+                          >
+                            <FileText className="w-4 h-4 mr-2" />
+                            Manage RFQs
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
                 ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </Layout>
   );
