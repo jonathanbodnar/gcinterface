@@ -17,8 +17,10 @@ async function bootstrap() {
     }),
   );
 
-  // API prefix
-  app.setGlobalPrefix('api');
+  // API prefix (exclude root and health endpoints)
+  app.setGlobalPrefix('api', {
+    exclude: ['/', 'health'],
+  });
 
   // CORS
   app.enableCors({
