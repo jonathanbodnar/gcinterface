@@ -11,6 +11,7 @@ import { SubcontractsModule } from './modules/subcontracts/subcontracts.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { BOMModule } from './modules/bom/bom.module';
 import { LaborModule } from './modules/labor/labor.module';
+import { MaterialsModule } from './modules/materials/materials.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { LaborModule } from './modules/labor/labor.module';
     QuotesModule,
     SubcontractsModule,
     AdminModule,
+    MaterialsModule,
   ],
   controllers: [AppController],
   providers: [],
