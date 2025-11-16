@@ -209,14 +209,41 @@ export class BOMGeneratorService {
     const estimatedUnitCost = this.estimateUnitCost(data.category, data.uom);
     const totalCost = finalQty * estimatedUnitCost;
 
+    // Determine trade from CSI division or category
+    const trade = this.inferTrade(data.csiDivision, data.category);
+
+    // Create or update material in materials database
+    let materialId: string | undefined;
+    try {
+      const material = await this.materialsService.createOrUpdateMaterial({
+        name: data.description,
+        trade,
+        description: data.description,
+        sku: data.sku,
+        category: data.category,
+        manufacturer: data.manufacturer,
+        model: data.model,
+        specs: data.specs,
+        uom: data.uom,
+      });
+      materialId = material.id;
+    } catch (error) {
+      console.error('Failed to create/update material:', error);
+      // Continue without materialId if it fails
+    }
+
     return this.prisma.bOM.create({
       data: {
         projectId,
         estimateId,
+        materialId,
         csiDivision: data.csiDivision,
         category: data.category,
         description: data.description,
         sku: data.sku,
+        manufacturer: data.manufacturer,
+        model: data.model,
+        specs: data.specs,
         quantity: data.quantity,
         uom: data.uom,
         wasteFactor: data.wasteFactor,
@@ -227,6 +254,37 @@ export class BOMGeneratorService {
         source: data.source,
       },
     });
+  }
+
+  private inferTrade(csiDivision: string, category: string): string {
+    // Infer trade from CSI division
+    const division = csiDivision?.substring(0, 2);
+    const tradeMap: Record<string, string> = {
+      '09': 'A', // Finishes
+      '22': 'P', // Plumbing
+      '23': 'M', // HVAC
+      '26': 'E', // Electrical
+      '27': 'E', // Communications
+      '28': 'E', // Electronic Safety
+      '03': 'S', // Concrete
+      '05': 'S', // Metals/Structural
+      '21': 'F', // Fire Protection
+    };
+
+    if (division && tradeMap[division]) {
+      return tradeMap[division];
+    }
+
+    // Fallback: infer from category
+    const categoryLower = category?.toLowerCase() || '';
+    if (categoryLower.includes('plumb') || categoryLower.includes('pipe')) return 'P';
+    if (categoryLower.includes('hvac') || categoryLower.includes('mechanical') || categoryLower.includes('duct')) return 'M';
+    if (categoryLower.includes('electric') || categoryLower.includes('wire') || categoryLower.includes('conduit')) return 'E';
+    if (categoryLower.includes('floor') || categoryLower.includes('wall') || categoryLower.includes('ceiling')) return 'A';
+    if (categoryLower.includes('fire') || categoryLower.includes('sprinkler')) return 'F';
+    if (categoryLower.includes('concrete') || categoryLower.includes('steel') || categoryLower.includes('structural')) return 'S';
+
+    return 'A'; // Default to Architectural
   }
 
   private calculateWallArea(room: any): number {

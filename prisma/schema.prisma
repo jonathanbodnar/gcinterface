@@ -134,12 +134,16 @@ model BOM {
   id          String  @id @default(cuid())
   projectId   String
   estimateId  String?
+  materialId  String? // Link to materials database
   
-  // Item details
+  // Item details (denormalized for performance)
   csiDivision String? // CSI division code
   category    String  // Flooring, Plumbing, HVAC, etc.
   description String
   sku         String?
+  manufacturer String?
+  model       String?
+  specs       Json?
   
   // Quantities
   quantity    Float
@@ -168,6 +172,7 @@ model BOM {
   // Relations
   project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
   estimate    Estimate?  @relation(fields: [estimateId], references: [id])
+  material    Material?  @relation(fields: [materialId], references: [id])
   rfqItems    RFQItem[]
   quoteItems  QuoteItem[]
 
