@@ -88,6 +88,54 @@ enum ProjectStatus {
 }
 
 // ============================================================================
+// MATERIALS DATABASE (Auto-populated from takeoff imports)
+// ============================================================================
+
+model Material {
+  id           String  @id @default(cuid())
+  
+  // Core identification
+  name         String // Material name
+  description  String? // Full description
+  sku          String? // SKU if available
+  category     String? // CSI division or category
+  trade        String // M, E, P, A, S, F
+  
+  // Specifications (from takeoff)
+  manufacturer String?
+  model        String?
+  specs        Json? // All specifications from takeoff
+  
+  // Pricing & Labor (configured by admin)
+  unitCost     Float?
+  uom          String? // Unit of measure
+  laborHours   Float? // Hours per unit
+  wasteFactor  Float  @default(0.07) // 7% default waste
+  
+  // Sourcing
+  commonSuppliers String[] // Vendors who commonly supply this
+  requiredVendor  String? // If plan-specified vendor required
+  
+  // Tracking
+  timesUsed    Int    @default(0) // How many projects used this
+  lastUsed     DateTime?
+  firstSeen    DateTime @default(now()) // When first imported
+  
+  // Metadata
+  active       Boolean @default(true)
+  notes        String? // Admin notes
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  bomItems     BOM[]
+
+  @@unique([name, trade]) // Prevent duplicates by name+trade
+  @@map("materials")
+}
+
+// ============================================================================
 // ESTIMATES & BOM
 // ============================================================================
 
