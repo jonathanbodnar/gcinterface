@@ -190,6 +190,8 @@ model Vendor {
   city        String?
   state       String?
   zipCode     String?
+  website     String?
+  contactPerson String?
   
   // Location for proximity
   latitude    Float?
@@ -197,11 +199,36 @@ model Vendor {
   
   // Trade specialties
   trades      String[] // M, E, P, etc.
+  
+  // SUPPLIER-SPECIFIC FIELDS
   materials   String[] // Types of materials they supply
+  alternates  String[] // Alternative products for value engineering
+  isRequired  Boolean  @default(false) // Plan-specified required vendor
+  requiredFor String[] // Specific materials they're required for
+  
+  // CONTRACTOR-SPECIFIC FIELDS
+  services    String[] // Services: Drywall, Taping, Paint, Tile
+  crewSize    Int?     // Number of crew members
+  equipmentList String[] // Equipment they own
+  certifications String[] // OSHA, licenses, EPA, etc.
+  insurance   Json?    // {liability, workers_comp, expiry}
   
   // Performance
   rating      Float?   @default(0)
   reliability Float?   @default(0)
+  pastProjects Int?    @default(0)
+  
+  // Service area
+  serviceRadius Int?   // Miles from their location
+  preferredRegions String[] // Areas they prefer to work
+  
+  // Financial
+  paymentTerms String? // Net 30, Net 60, etc.
+  creditLimit  Float?
+  
+  // Notes
+  notes       String?
+  internalNotes String? // Private admin notes
   
   active      Boolean  @default(true)
   
