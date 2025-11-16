@@ -167,15 +167,6 @@ export default function Materials() {
     F: 'Fire Protection',
   };
 
-  const getVendorTypeBadge = (type: string) => {
-    switch (type) {
-      case 'MATERIAL_SUPPLIER':
-        return <Badge variant="default" className="gap-1"><Package className="w-3 h-3" />Supplier</Badge>;
-      default:
-        return <Badge>{type}</Badge>;
-    }
-  };
-
   return (
     <Layout>
       <div className="space-y-6">

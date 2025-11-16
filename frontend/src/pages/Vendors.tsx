@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { MultiSelect } from '@/components/ui/multi-select';
-import { Users, Plus, Upload, Loader2, Edit2, Package, HardHat, Mail, Phone, Building2, Star } from 'lucide-react';
+import { Plus, Upload, Loader2, Edit2, Package, HardHat, Mail, Phone, Building2, Star } from 'lucide-react';
 import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
