@@ -1,7 +1,7 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import { Building2, LayoutDashboard, FolderKanban, Package, Users, Settings, Mail, LogOut, User } from 'lucide-react';
+import { LayoutDashboard, FolderKanban, Package, Users, Settings, Mail, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -37,43 +37,31 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <nav className="border-b bg-card sticky top-0 z-50 shadow-sm">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
-            <div className="flex items-center space-x-8">
-              <div className="flex items-center space-x-2">
-                <Building2 className="w-6 h-6 text-primary" />
-                <span className="text-xl font-bold">GC Interface</span>
-              </div>
-              <div className="hidden md:flex items-center space-x-1">
-                {navItems.map((item) => {
-                  const Icon = item.icon;
-                  const isActive = location.pathname === item.path;
-                  return (
-                    <Button
-                      key={item.path}
-                      variant={isActive ? 'secondary' : 'ghost'}
-                      onClick={() => navigate(item.path)}
-                      className={cn(
-                        'flex items-center gap-2',
-                        isActive && 'bg-secondary'
-                      )}
-                    >
-                      <Icon className="w-4 h-4" />
-                      {item.label}
-                    </Button>
-                  );
-                })}
-              </div>
+            <div className="flex items-center space-x-1">
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = location.pathname === item.path;
+                return (
+                  <Button
+                    key={item.path}
+                    variant={isActive ? 'secondary' : 'ghost'}
+                    onClick={() => navigate(item.path)}
+                    className={cn(
+                      'flex items-center gap-2',
+                      isActive && 'bg-secondary'
+                    )}
+                  >
+                    <Icon className="w-4 h-4" />
+                    {item.label}
+                  </Button>
+                );
+              })}
             </div>
 
-            <div className="flex items-center gap-4">
-              <div className="hidden sm:flex items-center gap-3">
-                <div className="flex items-center gap-2">
-                  <User className="w-4 h-4 text-muted-foreground" />
-                  <span className="text-sm font-medium">{user?.name}</span>
-                </div>
-                <span className={cn('px-2 py-1 rounded-full text-xs font-medium', getRoleBadgeColor(user?.role || ''))}>
-                  {user?.role?.replace('_', ' ')}
-                </span>
-              </div>
+            <div className="flex items-center gap-2">
+              <span className={cn('px-2 py-1 rounded-full text-xs font-medium', getRoleBadgeColor(user?.role || ''))}>
+                {user?.role?.replace('_', ' ')}
+              </span>
               <Button variant="outline" size="sm" onClick={logout}>
                 <LogOut className="w-4 h-4 mr-2" />
                 Logout
