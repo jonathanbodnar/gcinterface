@@ -9,13 +9,20 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { DollarSign, Percent, Users, Mail, Plus, Edit2, Upload, Loader2, Save, Package, HardHat } from 'lucide-react';
+import { MultiSelect } from '@/components/ui/multi-select';
+import { DollarSign, Percent, Users, Mail, Plus, Edit2, Upload, Loader2, Save, Package, HardHat, ExternalLink, Building2 } from 'lucide-react';
 import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 export default function AdminCenter() {
   const [activeTab, setActiveTab] = useState('material-rules');
+  
+  // Materials database
+  const [allMaterials, setAllMaterials] = useState<any[]>([]);
+  const [materialOptions, setMaterialOptions] = useState<{ value: string; label: string }[]>([]);
+  const [selectedMaterialForView, setSelectedMaterialForView] = useState<any>(null);
+  const [materialViewDialog, setMaterialViewDialog] = useState(false);
   
   // Material Rules
   const [materialRules, setMaterialRules] = useState<any[]>([]);
@@ -38,6 +45,7 @@ export default function AdminCenter() {
   const [vendorDialog, setVendorDialog] = useState(false);
   const [editingVendor, setEditingVendor] = useState<any>(null);
   const [vendorType, setVendorType] = useState<'MATERIAL_SUPPLIER' | 'SUBCONTRACTOR' | 'BOTH'>('MATERIAL_SUPPLIER');
+  const [selectedMaterialIds, setSelectedMaterialIds] = useState<string[]>([]);
   const [vendorForm, setVendorForm] = useState({
     name: '',
     email: '',
@@ -49,7 +57,6 @@ export default function AdminCenter() {
     trades: '',
     
     // Supplier fields
-    materials: '',
     alternates: '',
     isRequired: false,
     requiredFor: '',
@@ -82,11 +89,25 @@ export default function AdminCenter() {
 
   // Load data
   useEffect(() => {
+    loadAllMaterials();
     loadMaterialRules();
     loadTradeMarkups();
     loadVendors();
     loadEmailTemplates();
   }, []);
+
+  const loadAllMaterials = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/materials`);
+      setAllMaterials(response.data);
+      setMaterialOptions(response.data.map((m: any) => ({
+        value: m.id,
+        label: `${m.name} (${m.trade}) - ${m.category || 'No category'}`,
+      })));
+    } catch (error) {
+      console.error('Failed to load materials:', error);
+    }
+  };
 
   const loadMaterialRules = async () => {
     try {
@@ -126,6 +147,16 @@ export default function AdminCenter() {
       setEmailTemplates(response.data);
     } catch (error) {
       console.error('Failed to load email templates:', error);
+    }
+  };
+
+  const viewMaterialDetails = async (materialId: string) => {
+    try {
+      const response = await axios.get(`${API_URL}/materials/${materialId}`);
+      setSelectedMaterialForView(response.data);
+      setMaterialViewDialog(true);
+    } catch (error) {
+      console.error('Failed to load material details:', error);
     }
   };
 
@@ -202,6 +233,15 @@ export default function AdminCenter() {
     if (vendor) {
       setEditingVendor(vendor);
       setVendorType(vendor.type || 'MATERIAL_SUPPLIER');
+      
+      // Get material IDs from material names
+      const materialIds = vendor.materials?.map((materialName: string) => {
+        const mat = allMaterials.find(m => m.name === materialName || m.id === materialName);
+        return mat?.id;
+      }).filter(Boolean) || [];
+      
+      setSelectedMaterialIds(materialIds);
+      
       setVendorForm({
         name: vendor.name || '',
         email: vendor.email || '',
@@ -213,7 +253,6 @@ export default function AdminCenter() {
         trades: vendor.trades?.join(', ') || '',
         
         // Supplier fields
-        materials: vendor.materials?.join(', ') || '',
         alternates: vendor.alternates?.join(', ') || '',
         isRequired: vendor.isRequired || false,
         requiredFor: vendor.requiredFor?.join(', ') || '',
@@ -234,6 +273,7 @@ export default function AdminCenter() {
     } else {
       setEditingVendor(null);
       setVendorType('MATERIAL_SUPPLIER');
+      setSelectedMaterialIds([]);
       setVendorForm({
         name: '',
         email: '',
@@ -243,7 +283,6 @@ export default function AdminCenter() {
         contactPerson: '',
         type: 'MATERIAL_SUPPLIER',
         trades: '',
-        materials: '',
         alternates: '',
         isRequired: false,
         requiredFor: '',
@@ -264,6 +303,12 @@ export default function AdminCenter() {
   const saveVendor = async () => {
     setLoading(true);
     try {
+      // Get material names from selected IDs
+      const materialNames = selectedMaterialIds.map(id => {
+        const mat = allMaterials.find(m => m.id === id);
+        return mat?.name;
+      }).filter(Boolean);
+
       const baseData = {
         name: vendorForm.name,
         email: vendorForm.email,
@@ -282,7 +327,7 @@ export default function AdminCenter() {
 
       // Add supplier-specific fields
       const supplierData = (vendorType === 'MATERIAL_SUPPLIER' || vendorType === 'BOTH') ? {
-        materials: vendorForm.materials.split(',').map(m => m.trim()).filter(Boolean),
+        materials: materialNames,
         alternates: vendorForm.alternates.split(',').map(a => a.trim()).filter(Boolean),
         isRequired: vendorForm.isRequired,
         requiredFor: vendorForm.requiredFor.split(',').map(r => r.trim()).filter(Boolean),
@@ -359,6 +404,38 @@ export default function AdminCenter() {
     }
   };
 
+  const handleMaterialSearch = async (query: string) => {
+    if (!query) {
+      loadAllMaterials();
+      return;
+    }
+    try {
+      const response = await axios.get(`${API_URL}/materials/search?q=${encodeURIComponent(query)}`);
+      setMaterialOptions(response.data.map((m: any) => ({
+        value: m.id,
+        label: `${m.name} (${m.trade}) - ${m.category || 'No category'}`,
+      })));
+    } catch (error) {
+      console.error('Failed to search materials:', error);
+    }
+  };
+
+  const handleAddNewMaterial = async (materialName: string) => {
+    try {
+      // Create a basic material entry
+      const response = await axios.post(`${API_URL}/materials`, {
+        name: materialName,
+        trade: 'A', // Default to Architectural
+        description: materialName,
+        active: true,
+      });
+      loadAllMaterials();
+      setSelectedMaterialIds([...selectedMaterialIds, response.data.id]);
+    } catch (error) {
+      console.error('Failed to add material:', error);
+    }
+  };
+
   const trades = ['M', 'E', 'P', 'A', 'S', 'F'];
   const tradeLabels: Record<string, string> = {
     M: 'Mechanical',
@@ -391,14 +468,18 @@ export default function AdminCenter() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
+            <TabsTrigger value="materials">
+              <Package className="w-4 h-4 mr-2" />
+              Materials
+            </TabsTrigger>
             <TabsTrigger value="material-rules">
               <DollarSign className="w-4 h-4 mr-2" />
-              Material Rules
+              Rules
             </TabsTrigger>
             <TabsTrigger value="trade-markups">
               <Percent className="w-4 h-4 mr-2" />
-              Trade Markups
+              Markups
             </TabsTrigger>
             <TabsTrigger value="vendors">
               <Users className="w-4 h-4 mr-2" />
@@ -406,11 +487,82 @@ export default function AdminCenter() {
             </TabsTrigger>
             <TabsTrigger value="email-templates">
               <Mail className="w-4 h-4 mr-2" />
-              Email Templates
+              Templates
             </TabsTrigger>
           </TabsList>
 
-          {/* Material Rules Tab */}
+          {/* Materials Database Tab */}
+          <TabsContent value="materials" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Materials Database</CardTitle>
+                    <CardDescription>
+                      All materials from imported projects ({allMaterials.length} materials)
+                    </CardDescription>
+                  </div>
+                  <Button variant="outline" onClick={loadAllMaterials}>
+                    <Loader2 className="w-4 h-4 mr-2" />
+                    Refresh
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Material Name</TableHead>
+                      <TableHead>Trade</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead>Times Used</TableHead>
+                      <TableHead>Suppliers</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {allMaterials.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                          No materials yet. Import a project to auto-populate materials.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      allMaterials.slice(0, 100).map((material) => (
+                        <TableRow key={material.id} className="cursor-pointer hover:bg-muted/50">
+                          <TableCell className="font-medium">{material.name}</TableCell>
+                          <TableCell><Badge>{material.trade}</Badge></TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{material.category || 'N/A'}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{material.timesUsed || 0}x</Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {material.commonSuppliers?.length || 0} vendors
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => viewMaterialDetails(material.id)}
+                            >
+                              <ExternalLink className="w-4 h-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+                {allMaterials.length > 100 && (
+                  <p className="text-sm text-muted-foreground text-center mt-4">
+                    Showing first 100 of {allMaterials.length} materials
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Material Rules Tab - UNCHANGED */}
           <TabsContent value="material-rules" className="space-y-4">
             <Card>
               <CardHeader>
@@ -466,7 +618,7 @@ export default function AdminCenter() {
             </Card>
           </TabsContent>
 
-          {/* Trade Markups Tab */}
+          {/* Trade Markups Tab - UNCHANGED */}
           <TabsContent value="trade-markups" className="space-y-4">
             <Card>
               <CardHeader>
@@ -519,7 +671,7 @@ export default function AdminCenter() {
             </Card>
           </TabsContent>
 
-          {/* Vendors Tab */}
+          {/* Vendors Tab - Updated with Material Multi-Select */}
           <TabsContent value="vendors" className="space-y-4">
             <Card>
               <CardHeader>
@@ -548,7 +700,7 @@ export default function AdminCenter() {
                       <TableHead>Type</TableHead>
                       <TableHead>Contact</TableHead>
                       <TableHead>Trades</TableHead>
-                      <TableHead>Rating</TableHead>
+                      <TableHead>Materials/Services</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
@@ -570,16 +722,18 @@ export default function AdminCenter() {
                           </TableCell>
                           <TableCell>
                             <div className="flex flex-wrap gap-1">
-                              {vendor.trades?.slice(0, 3).map((trade: string) => (
-                                <Badge key={trade} variant="secondary">{trade}</Badge>
+                              {vendor.trades?.slice(0, 2).map((trade: string) => (
+                                <Badge key={trade} variant="secondary" className="text-xs">{trade}</Badge>
                               ))}
-                              {vendor.trades?.length > 3 && (
-                                <Badge variant="secondary">+{vendor.trades.length - 3}</Badge>
+                              {vendor.trades?.length > 2 && (
+                                <Badge variant="secondary" className="text-xs">+{vendor.trades.length - 2}</Badge>
                               )}
                             </div>
                           </TableCell>
-                          <TableCell>
-                            {vendor.rating ? `${vendor.rating.toFixed(1)}/5` : 'N/A'}
+                          <TableCell className="text-sm text-muted-foreground">
+                            {vendor.type === 'MATERIAL_SUPPLIER' || vendor.type === 'BOTH' 
+                              ? `${vendor.materials?.length || 0} materials`
+                              : `${vendor.services?.length || 0} services`}
                           </TableCell>
                           <TableCell>
                             <Badge variant={vendor.active ? 'default' : 'secondary'}>
@@ -600,7 +754,7 @@ export default function AdminCenter() {
             </Card>
           </TabsContent>
 
-          {/* Email Templates Tab */}
+          {/* Email Templates Tab - UNCHANGED */}
           <TabsContent value="email-templates" className="space-y-4">
             <Card>
               <CardHeader>
@@ -655,7 +809,131 @@ export default function AdminCenter() {
           </TabsContent>
         </Tabs>
 
-        {/* Material Rule Dialog */}
+        {/* Material View Dialog */}
+        <Dialog open={materialViewDialog} onOpenChange={setMaterialViewDialog}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>{selectedMaterialForView?.name}</DialogTitle>
+              <DialogDescription>
+                Material details and vendor information
+              </DialogDescription>
+            </DialogHeader>
+            {selectedMaterialForView && (
+              <div className="grid gap-6 py-4">
+                {/* Material Info */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-muted-foreground">Trade</Label>
+                    <div><Badge>{selectedMaterialForView.trade}</Badge></div>
+                  </div>
+                  <div>
+                    <Label className="text-muted-foreground">Category</Label>
+                    <div className="text-sm">{selectedMaterialForView.category || 'N/A'}</div>
+                  </div>
+                  {selectedMaterialForView.sku && (
+                    <div>
+                      <Label className="text-muted-foreground">SKU</Label>
+                      <div className="text-sm font-mono">{selectedMaterialForView.sku}</div>
+                    </div>
+                  )}
+                  <div>
+                    <Label className="text-muted-foreground">Times Used</Label>
+                    <div className="text-sm">{selectedMaterialForView.timesUsed || 0} projects</div>
+                  </div>
+                </div>
+
+                {/* Specifications */}
+                {selectedMaterialForView.specs && (
+                  <div>
+                    <Label className="text-muted-foreground mb-2 block">Specifications</Label>
+                    <pre className="bg-muted p-3 rounded-md text-xs overflow-auto max-h-40">
+                      {JSON.stringify(selectedMaterialForView.specs, null, 2)}
+                    </pre>
+                  </div>
+                )}
+
+                {/* Suppliers */}
+                <div>
+                  <Label className="mb-2 block">Vendors That Supply This Material</Label>
+                  {selectedMaterialForView.suppliers?.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No vendors configured for this material yet.</p>
+                  ) : (
+                    <div className="grid gap-2">
+                      {selectedMaterialForView.suppliers?.map((vendor: any) => (
+                        <Card key={vendor.id}>
+                          <CardContent className="p-4">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <h4 className="font-semibold">{vendor.name}</h4>
+                                <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
+                                  {getVendorTypeBadge(vendor.type)}
+                                  {vendor.rating && (
+                                    <span>★ {vendor.rating.toFixed(1)}</span>
+                                  )}
+                                </div>
+                              </div>
+                              <Button size="sm" variant="outline">
+                                <Mail className="w-4 h-4 mr-2" />
+                                Contact
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Cost Configuration */}
+                <div className="border-t pt-4">
+                  <h3 className="font-semibold mb-4">Cost & Labor Configuration</h3>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="matUnitCost">Unit Cost ($)</Label>
+                      <Input
+                        id="matUnitCost"
+                        type="number"
+                        step="0.01"
+                        defaultValue={selectedMaterialForView.unitCost || ''}
+                        placeholder="0.00"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="matLaborHours">Labor Hours</Label>
+                      <Input
+                        id="matLaborHours"
+                        type="number"
+                        step="0.01"
+                        defaultValue={selectedMaterialForView.laborHours || ''}
+                        placeholder="0.00"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="matWasteFactor">Waste Factor (%)</Label>
+                      <Input
+                        id="matWasteFactor"
+                        type="number"
+                        step="0.1"
+                        defaultValue={(selectedMaterialForView.wasteFactor * 100) || '7'}
+                        placeholder="7.0"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setMaterialViewDialog(false)}>
+                Close
+              </Button>
+              <Button>
+                Save Configuration
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Material Rule Dialog - UNCHANGED */}
         <Dialog open={materialRuleDialog} onOpenChange={setMaterialRuleDialog}>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
@@ -730,7 +1008,7 @@ export default function AdminCenter() {
           </DialogContent>
         </Dialog>
 
-        {/* Vendor Dialog */}
+        {/* Vendor Dialog - WITH MATERIAL MULTI-SELECT */}
         <Dialog open={vendorDialog} onOpenChange={setVendorDialog}>
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
@@ -857,13 +1135,18 @@ export default function AdminCenter() {
                   </h3>
                   <div className="grid gap-4">
                     <div className="grid gap-2">
-                      <Label htmlFor="vendorMaterials">Materials Supplied (comma-separated)</Label>
-                      <Input
-                        id="vendorMaterials"
-                        value={vendorForm.materials}
-                        onChange={(e) => setVendorForm({ ...vendorForm, materials: e.target.value })}
-                        placeholder="Drywall, Studs, Paint, Insulation"
+                      <Label htmlFor="vendorMaterials">Materials Supplied</Label>
+                      <MultiSelect
+                        options={materialOptions}
+                        selected={selectedMaterialIds}
+                        onChange={setSelectedMaterialIds}
+                        onSearch={handleMaterialSearch}
+                        onAddNew={handleAddNewMaterial}
+                        placeholder="Search and select materials..."
                       />
+                      <p className="text-xs text-muted-foreground">
+                        Search from materials database or add new materials on-the-fly
+                      </p>
                     </div>
                     <div className="grid gap-2">
                       <Label htmlFor="alternates">Product Alternates (comma-separated)</Label>
@@ -873,7 +1156,7 @@ export default function AdminCenter() {
                         onChange={(e) => setVendorForm({ ...vendorForm, alternates: e.target.value })}
                         placeholder="Brand A, Brand B alternatives"
                       />
-                      <p className="text-xs text-muted-foreground">Material alternates this vendor offers for value engineering</p>
+                      <p className="text-xs text-muted-foreground">Material alternates for value engineering</p>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="flex items-center space-x-2">
@@ -967,7 +1250,10 @@ export default function AdminCenter() {
 
               {/* Location & Service Area */}
               <div className="space-y-4 border-t pt-4">
-                <h3 className="font-semibold text-sm">Location & Service Area</h3>
+                <h3 className="font-semibold text-sm flex items-center gap-2">
+                  <Building2 className="w-4 h-4" />
+                  Location & Service Area
+                </h3>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-2">
                     <Label htmlFor="serviceRadius">Service Radius (miles)</Label>
@@ -978,6 +1264,7 @@ export default function AdminCenter() {
                       onChange={(e) => setVendorForm({ ...vendorForm, serviceRadius: e.target.value })}
                       placeholder="50"
                     />
+                    <p className="text-xs text-muted-foreground">Distance from vendor location for proximity filtering</p>
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="preferredRegions">Preferred Regions (comma-separated)</Label>
@@ -1015,7 +1302,7 @@ export default function AdminCenter() {
           </DialogContent>
         </Dialog>
 
-        {/* Email Template Dialog */}
+        {/* Email Template Dialog - UNCHANGED */}
         <Dialog open={templateDialog} onOpenChange={setTemplateDialog}>
           <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
