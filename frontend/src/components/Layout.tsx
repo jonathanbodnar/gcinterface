@@ -1,7 +1,7 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import { Building2, LayoutDashboard, FolderKanban, Settings, LogOut, User } from 'lucide-react';
+import { Building2, LayoutDashboard, FolderKanban, Package, Users, Settings, Mail, LogOut, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -12,7 +12,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const navItems = [
     { label: 'Dashboard', path: '/', icon: LayoutDashboard },
     { label: 'Projects', path: '/projects', icon: FolderKanban },
-    { label: 'Admin', path: '/admin', icon: Settings },
+    { label: 'Materials', path: '/materials', icon: Package },
+    { label: 'Vendors', path: '/vendors', icon: Users },
+    { label: 'Rules & Markups', path: '/rules', icon: Settings },
+    { label: 'Templates', path: '/templates', icon: Mail },
   ];
 
   const getRoleBadgeColor = (role: string) => {

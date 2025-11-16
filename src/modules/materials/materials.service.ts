@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@/common/prisma/prisma.service';
+import * as XLSX from 'xlsx';
 
 @Injectable()
 export class MaterialsService {
@@ -194,6 +195,64 @@ export class MaterialsService {
         rating: 'desc',
       },
     });
+  }
+
+  async importFromCSV(file: Express.Multer.File) {
+    if (!file) {
+      throw new Error('No file provided');
+    }
+
+    try {
+      // Parse CSV using xlsx
+      const workbook = XLSX.read(file.buffer, { type: 'buffer' });
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const data = XLSX.utils.sheet_to_json(worksheet);
+
+      const imported = [];
+      const errors = [];
+
+      for (const row of data as any[]) {
+        try {
+          // Map CSV columns to material fields
+          const materialData = {
+            name: row.name || row.Name || row.Material || row.MATERIAL,
+            trade: row.trade || row.Trade || row.TRADE || 'A',
+            description: row.description || row.Description || row.name,
+            category: row.category || row.Category,
+            sku: row.sku || row.SKU || row.sku_code,
+            manufacturer: row.manufacturer || row.Manufacturer,
+            model: row.model || row.Model,
+            uom: row.uom || row.UOM || row.unit,
+            unitCost: row.unitCost || row.unit_cost || row.cost ? parseFloat(row.unitCost || row.unit_cost || row.cost) : null,
+            laborHours: row.laborHours || row.labor_hours ? parseFloat(row.laborHours || row.labor_hours) : null,
+            wasteFactor: row.wasteFactor || row.waste_factor ? parseFloat(row.wasteFactor || row.waste_factor) / 100 : 0.07,
+          };
+
+          if (!materialData.name || !materialData.trade) {
+            errors.push({ row, error: 'Missing required fields: name and trade' });
+            continue;
+          }
+
+          const material = await this.createOrUpdateMaterial(materialData);
+          imported.push(material);
+        } catch (error) {
+          errors.push({ row, error: error.message });
+        }
+      }
+
+      return {
+        success: true,
+        imported: imported.length,
+        errors: errors.length,
+        details: {
+          imported,
+          errors,
+        },
+      };
+    } catch (error) {
+      throw new Error(`Failed to parse CSV: ${error.message}`);
+    }
   }
 }
 

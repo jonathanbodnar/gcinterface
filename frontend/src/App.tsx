@@ -4,10 +4,13 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Projects from './pages/Projects';
+import Materials from './pages/Materials';
+import Vendors from './pages/Vendors';
+import RulesMarkups from './pages/RulesMarkups';
+import Templates from './pages/Templates';
 import VendorMatching from './pages/VendorMatching';
 import RFQManagement from './pages/RFQManagement';
 import QuoteComparison from './pages/QuoteComparison';
-import AdminCenter from './pages/AdminCenter';
 import type { ReactNode } from 'react';
 import './App.css';
 
@@ -55,9 +58,24 @@ function App() {
                 <QuoteComparison />
               </ProtectedRoute>
             } />
-            <Route path="/admin" element={
+            <Route path="/materials" element={
               <ProtectedRoute>
-                <AdminCenter />
+                <Materials />
+              </ProtectedRoute>
+            } />
+            <Route path="/vendors" element={
+              <ProtectedRoute>
+                <Vendors />
+              </ProtectedRoute>
+            } />
+            <Route path="/rules" element={
+              <ProtectedRoute>
+                <RulesMarkups />
+              </ProtectedRoute>
+            } />
+            <Route path="/templates" element={
+              <ProtectedRoute>
+                <Templates />
               </ProtectedRoute>
             } />
           </Routes>
