@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { DollarSign, Percent, Users, Mail, Plus, Edit2, Upload, Loader2, Save } from 'lucide-react';
+import { DollarSign, Percent, Users, Mail, Plus, Edit2, Upload, Loader2, Save, Package, HardHat } from 'lucide-react';
 import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
@@ -37,13 +37,35 @@ export default function AdminCenter() {
   const [vendors, setVendors] = useState<any[]>([]);
   const [vendorDialog, setVendorDialog] = useState(false);
   const [editingVendor, setEditingVendor] = useState<any>(null);
+  const [vendorType, setVendorType] = useState<'MATERIAL_SUPPLIER' | 'SUBCONTRACTOR' | 'BOTH'>('MATERIAL_SUPPLIER');
   const [vendorForm, setVendorForm] = useState({
     name: '',
     email: '',
     phone: '',
     address: '',
+    website: '',
+    contactPerson: '',
+    type: 'MATERIAL_SUPPLIER',
     trades: '',
+    
+    // Supplier fields
     materials: '',
+    alternates: '',
+    isRequired: false,
+    requiredFor: '',
+    
+    // Contractor fields
+    services: '',
+    crewSize: '',
+    equipmentList: '',
+    certifications: '',
+    insurance: '',
+    
+    // Common fields
+    serviceRadius: '',
+    preferredRegions: '',
+    paymentTerms: '',
+    notes: '',
   });
 
   // Email Templates
@@ -179,23 +201,61 @@ export default function AdminCenter() {
   const openVendorDialog = (vendor?: any) => {
     if (vendor) {
       setEditingVendor(vendor);
+      setVendorType(vendor.type || 'MATERIAL_SUPPLIER');
       setVendorForm({
         name: vendor.name || '',
         email: vendor.email || '',
         phone: vendor.phone || '',
         address: vendor.address || '',
+        website: vendor.website || '',
+        contactPerson: vendor.contactPerson || '',
+        type: vendor.type || 'MATERIAL_SUPPLIER',
         trades: vendor.trades?.join(', ') || '',
+        
+        // Supplier fields
         materials: vendor.materials?.join(', ') || '',
+        alternates: vendor.alternates?.join(', ') || '',
+        isRequired: vendor.isRequired || false,
+        requiredFor: vendor.requiredFor?.join(', ') || '',
+        
+        // Contractor fields
+        services: vendor.services?.join(', ') || '',
+        crewSize: vendor.crewSize?.toString() || '',
+        equipmentList: vendor.equipmentList?.join(', ') || '',
+        certifications: vendor.certifications?.join(', ') || '',
+        insurance: vendor.insurance ? JSON.stringify(vendor.insurance) : '',
+        
+        // Common fields
+        serviceRadius: vendor.serviceRadius?.toString() || '',
+        preferredRegions: vendor.preferredRegions?.join(', ') || '',
+        paymentTerms: vendor.paymentTerms || '',
+        notes: vendor.notes || '',
       });
     } else {
       setEditingVendor(null);
+      setVendorType('MATERIAL_SUPPLIER');
       setVendorForm({
         name: '',
         email: '',
         phone: '',
         address: '',
+        website: '',
+        contactPerson: '',
+        type: 'MATERIAL_SUPPLIER',
         trades: '',
         materials: '',
+        alternates: '',
+        isRequired: false,
+        requiredFor: '',
+        services: '',
+        crewSize: '',
+        equipmentList: '',
+        certifications: '',
+        insurance: '',
+        serviceRadius: '',
+        preferredRegions: '',
+        paymentTerms: '',
+        notes: '',
       });
     }
     setVendorDialog(true);
@@ -204,15 +264,40 @@ export default function AdminCenter() {
   const saveVendor = async () => {
     setLoading(true);
     try {
-      const data = {
+      const baseData = {
         name: vendorForm.name,
         email: vendorForm.email,
         phone: vendorForm.phone,
         address: vendorForm.address,
+        website: vendorForm.website,
+        contactPerson: vendorForm.contactPerson,
+        type: vendorType,
         trades: vendorForm.trades.split(',').map(t => t.trim()).filter(Boolean),
-        materials: vendorForm.materials.split(',').map(m => m.trim()).filter(Boolean),
+        serviceRadius: vendorForm.serviceRadius ? parseInt(vendorForm.serviceRadius) : null,
+        preferredRegions: vendorForm.preferredRegions.split(',').map(r => r.trim()).filter(Boolean),
+        paymentTerms: vendorForm.paymentTerms,
+        notes: vendorForm.notes,
         active: true,
       };
+
+      // Add supplier-specific fields
+      const supplierData = (vendorType === 'MATERIAL_SUPPLIER' || vendorType === 'BOTH') ? {
+        materials: vendorForm.materials.split(',').map(m => m.trim()).filter(Boolean),
+        alternates: vendorForm.alternates.split(',').map(a => a.trim()).filter(Boolean),
+        isRequired: vendorForm.isRequired,
+        requiredFor: vendorForm.requiredFor.split(',').map(r => r.trim()).filter(Boolean),
+      } : {};
+
+      // Add contractor-specific fields
+      const contractorData = (vendorType === 'SUBCONTRACTOR' || vendorType === 'BOTH') ? {
+        services: vendorForm.services.split(',').map(s => s.trim()).filter(Boolean),
+        crewSize: vendorForm.crewSize ? parseInt(vendorForm.crewSize) : null,
+        equipmentList: vendorForm.equipmentList.split(',').map(e => e.trim()).filter(Boolean),
+        certifications: vendorForm.certifications.split(',').map(c => c.trim()).filter(Boolean),
+        insurance: vendorForm.insurance ? JSON.parse(vendorForm.insurance) : null,
+      } : {};
+
+      const data = { ...baseData, ...supplierData, ...contractorData };
 
       if (editingVendor) {
         await axios.put(`${API_URL}/vendors/${editingVendor.id}`, data);
@@ -282,6 +367,19 @@ export default function AdminCenter() {
     A: 'Architectural',
     S: 'Structural',
     F: 'Fire Protection',
+  };
+
+  const getVendorTypeBadge = (type: string) => {
+    switch (type) {
+      case 'MATERIAL_SUPPLIER':
+        return <Badge variant="default" className="gap-1"><Package className="w-3 h-3" />Supplier</Badge>;
+      case 'SUBCONTRACTOR':
+        return <Badge variant="secondary" className="gap-1"><HardHat className="w-3 h-3" />Contractor</Badge>;
+      case 'BOTH':
+        return <Badge className="gap-1"><Package className="w-3 h-3" /><HardHat className="w-3 h-3" />Both</Badge>;
+      default:
+        return <Badge>{type}</Badge>;
+    }
   };
 
   return (
@@ -428,7 +526,7 @@ export default function AdminCenter() {
                 <div className="flex items-center justify-between">
                   <div>
                     <CardTitle>Vendor Management</CardTitle>
-                    <CardDescription>Manage vendors and subcontractors</CardDescription>
+                    <CardDescription>Manage suppliers and subcontractors</CardDescription>
                   </div>
                   <div className="flex gap-2">
                     <Button variant="outline">
@@ -447,9 +545,10 @@ export default function AdminCenter() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Name</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Phone</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Contact</TableHead>
                       <TableHead>Trades</TableHead>
+                      <TableHead>Rating</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
@@ -457,7 +556,7 @@ export default function AdminCenter() {
                   <TableBody>
                     {vendors.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                        <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                           No vendors found. Click "Add Vendor" to create one.
                         </TableCell>
                       </TableRow>
@@ -465,8 +564,10 @@ export default function AdminCenter() {
                       vendors.map((vendor) => (
                         <TableRow key={vendor.id}>
                           <TableCell className="font-medium">{vendor.name}</TableCell>
-                          <TableCell>{vendor.email}</TableCell>
-                          <TableCell>{vendor.phone}</TableCell>
+                          <TableCell>{getVendorTypeBadge(vendor.type)}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {vendor.email || vendor.phone || 'N/A'}
+                          </TableCell>
                           <TableCell>
                             <div className="flex flex-wrap gap-1">
                               {vendor.trades?.slice(0, 3).map((trade: string) => (
@@ -476,6 +577,9 @@ export default function AdminCenter() {
                                 <Badge variant="secondary">+{vendor.trades.length - 3}</Badge>
                               )}
                             </div>
+                          </TableCell>
+                          <TableCell>
+                            {vendor.rating ? `${vendor.rating.toFixed(1)}/5` : 'N/A'}
                           </TableCell>
                           <TableCell>
                             <Badge variant={vendor.active ? 'default' : 'secondary'}>
@@ -628,68 +732,275 @@ export default function AdminCenter() {
 
         {/* Vendor Dialog */}
         <Dialog open={vendorDialog} onOpenChange={setVendorDialog}>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{editingVendor ? 'Edit' : 'Create'} Vendor</DialogTitle>
               <DialogDescription>
-                Add or update vendor information
+                Add or update vendor/contractor information
               </DialogDescription>
             </DialogHeader>
-            <div className="grid gap-4 py-4">
+            <div className="grid gap-6 py-4">
+              {/* Vendor Type Selection */}
               <div className="grid gap-2">
-                <Label htmlFor="vendorName">Vendor Name</Label>
-                <Input
-                  id="vendorName"
-                  value={vendorForm.name}
-                  onChange={(e) => setVendorForm({ ...vendorForm, name: e.target.value })}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="vendorEmail">Email</Label>
-                  <Input
-                    id="vendorEmail"
-                    type="email"
-                    value={vendorForm.email}
-                    onChange={(e) => setVendorForm({ ...vendorForm, email: e.target.value })}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="vendorPhone">Phone</Label>
-                  <Input
-                    id="vendorPhone"
-                    value={vendorForm.phone}
-                    onChange={(e) => setVendorForm({ ...vendorForm, phone: e.target.value })}
-                  />
+                <Label>Vendor Type</Label>
+                <div className="flex gap-2">
+                  {(['MATERIAL_SUPPLIER', 'SUBCONTRACTOR', 'BOTH'] as const).map((type) => (
+                    <Button
+                      key={type}
+                      type="button"
+                      variant={vendorType === type ? 'default' : 'outline'}
+                      onClick={() => {
+                        setVendorType(type);
+                        setVendorForm({ ...vendorForm, type });
+                      }}
+                      className="flex-1"
+                    >
+                      {type === 'MATERIAL_SUPPLIER' && <Package className="w-4 h-4 mr-2" />}
+                      {type === 'SUBCONTRACTOR' && <HardHat className="w-4 h-4 mr-2" />}
+                      {type === 'BOTH' && <><Package className="w-4 h-4 mr-1" /><HardHat className="w-4 h-4 mr-1" /></>}
+                      {type.replace('_', ' ')}
+                    </Button>
+                  ))}
                 </div>
               </div>
+
+              {/* Basic Information */}
+              <div className="space-y-4">
+                <h3 className="font-semibold text-sm">Basic Information</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="vendorName">Company Name *</Label>
+                    <Input
+                      id="vendorName"
+                      value={vendorForm.name}
+                      onChange={(e) => setVendorForm({ ...vendorForm, name: e.target.value })}
+                      placeholder="ABC Supply Co."
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="contactPerson">Contact Person</Label>
+                    <Input
+                      id="contactPerson"
+                      value={vendorForm.contactPerson}
+                      onChange={(e) => setVendorForm({ ...vendorForm, contactPerson: e.target.value })}
+                      placeholder="John Smith"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="vendorEmail">Email</Label>
+                    <Input
+                      id="vendorEmail"
+                      type="email"
+                      value={vendorForm.email}
+                      onChange={(e) => setVendorForm({ ...vendorForm, email: e.target.value })}
+                      placeholder="contact@vendor.com"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="vendorPhone">Phone</Label>
+                    <Input
+                      id="vendorPhone"
+                      value={vendorForm.phone}
+                      onChange={(e) => setVendorForm({ ...vendorForm, phone: e.target.value })}
+                      placeholder="(555) 123-4567"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="website">Website</Label>
+                    <Input
+                      id="website"
+                      value={vendorForm.website}
+                      onChange={(e) => setVendorForm({ ...vendorForm, website: e.target.value })}
+                      placeholder="www.vendor.com"
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="vendorAddress">Address</Label>
+                  <Input
+                    id="vendorAddress"
+                    value={vendorForm.address}
+                    onChange={(e) => setVendorForm({ ...vendorForm, address: e.target.value })}
+                    placeholder="123 Main St, City, State ZIP"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="vendorTrades">Trades (comma-separated)</Label>
+                    <Input
+                      id="vendorTrades"
+                      value={vendorForm.trades}
+                      onChange={(e) => setVendorForm({ ...vendorForm, trades: e.target.value })}
+                      placeholder="M, E, P"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="paymentTerms">Payment Terms</Label>
+                    <Input
+                      id="paymentTerms"
+                      value={vendorForm.paymentTerms}
+                      onChange={(e) => setVendorForm({ ...vendorForm, paymentTerms: e.target.value })}
+                      placeholder="Net 30"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Supplier-Specific Fields */}
+              {(vendorType === 'MATERIAL_SUPPLIER' || vendorType === 'BOTH') && (
+                <div className="space-y-4 border-t pt-4">
+                  <h3 className="font-semibold text-sm flex items-center gap-2">
+                    <Package className="w-4 h-4" />
+                    Supplier Details
+                  </h3>
+                  <div className="grid gap-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="vendorMaterials">Materials Supplied (comma-separated)</Label>
+                      <Input
+                        id="vendorMaterials"
+                        value={vendorForm.materials}
+                        onChange={(e) => setVendorForm({ ...vendorForm, materials: e.target.value })}
+                        placeholder="Drywall, Studs, Paint, Insulation"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="alternates">Product Alternates (comma-separated)</Label>
+                      <Input
+                        id="alternates"
+                        value={vendorForm.alternates}
+                        onChange={(e) => setVendorForm({ ...vendorForm, alternates: e.target.value })}
+                        placeholder="Brand A, Brand B alternatives"
+                      />
+                      <p className="text-xs text-muted-foreground">Material alternates this vendor offers for value engineering</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id="isRequired"
+                          checked={vendorForm.isRequired}
+                          onChange={(e) => setVendorForm({ ...vendorForm, isRequired: e.target.checked })}
+                          className="w-4 h-4 rounded border-input"
+                        />
+                        <Label htmlFor="isRequired" className="cursor-pointer">
+                          Plan-Required Vendor
+                        </Label>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="requiredFor">Required For (if checked)</Label>
+                        <Input
+                          id="requiredFor"
+                          value={vendorForm.requiredFor}
+                          onChange={(e) => setVendorForm({ ...vendorForm, requiredFor: e.target.value })}
+                          placeholder="Specific materials"
+                          disabled={!vendorForm.isRequired}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Contractor-Specific Fields */}
+              {(vendorType === 'SUBCONTRACTOR' || vendorType === 'BOTH') && (
+                <div className="space-y-4 border-t pt-4">
+                  <h3 className="font-semibold text-sm flex items-center gap-2">
+                    <HardHat className="w-4 h-4" />
+                    Contractor Details
+                  </h3>
+                  <div className="grid gap-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="services">Services Provided (comma-separated)</Label>
+                      <Input
+                        id="services"
+                        value={vendorForm.services}
+                        onChange={(e) => setVendorForm({ ...vendorForm, services: e.target.value })}
+                        placeholder="Drywall Installation, Taping, Painting, Tile Work"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="crewSize">Crew Size</Label>
+                        <Input
+                          id="crewSize"
+                          type="number"
+                          value={vendorForm.crewSize}
+                          onChange={(e) => setVendorForm({ ...vendorForm, crewSize: e.target.value })}
+                          placeholder="5"
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="equipmentList">Equipment (comma-separated)</Label>
+                        <Input
+                          id="equipmentList"
+                          value={vendorForm.equipmentList}
+                          onChange={(e) => setVendorForm({ ...vendorForm, equipmentList: e.target.value })}
+                          placeholder="Lifts, Tools, Vehicles"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="certifications">Certifications (comma-separated)</Label>
+                      <Input
+                        id="certifications"
+                        value={vendorForm.certifications}
+                        onChange={(e) => setVendorForm({ ...vendorForm, certifications: e.target.value })}
+                        placeholder="OSHA, Trade License, EPA Certified"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="insurance">Insurance (JSON)</Label>
+                      <Textarea
+                        id="insurance"
+                        value={vendorForm.insurance}
+                        onChange={(e) => setVendorForm({ ...vendorForm, insurance: e.target.value })}
+                        placeholder='{"liability": 2000000, "workers_comp": 1000000, "expiry": "2025-12-31"}'
+                        rows={3}
+                      />
+                      <p className="text-xs text-muted-foreground">Format: liability, workers compensation, expiry date</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Location & Service Area */}
+              <div className="space-y-4 border-t pt-4">
+                <h3 className="font-semibold text-sm">Location & Service Area</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="serviceRadius">Service Radius (miles)</Label>
+                    <Input
+                      id="serviceRadius"
+                      type="number"
+                      value={vendorForm.serviceRadius}
+                      onChange={(e) => setVendorForm({ ...vendorForm, serviceRadius: e.target.value })}
+                      placeholder="50"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="preferredRegions">Preferred Regions (comma-separated)</Label>
+                    <Input
+                      id="preferredRegions"
+                      value={vendorForm.preferredRegions}
+                      onChange={(e) => setVendorForm({ ...vendorForm, preferredRegions: e.target.value })}
+                      placeholder="North County, Downtown, East Bay"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Notes */}
               <div className="grid gap-2">
-                <Label htmlFor="vendorAddress">Address</Label>
-                <Input
-                  id="vendorAddress"
-                  value={vendorForm.address}
-                  onChange={(e) => setVendorForm({ ...vendorForm, address: e.target.value })}
+                <Label htmlFor="notes">Notes</Label>
+                <Textarea
+                  id="notes"
+                  value={vendorForm.notes}
+                  onChange={(e) => setVendorForm({ ...vendorForm, notes: e.target.value })}
+                  placeholder="Additional information about this vendor"
+                  rows={3}
                 />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="vendorTrades">Trades (comma-separated)</Label>
-                  <Input
-                    id="vendorTrades"
-                    value={vendorForm.trades}
-                    onChange={(e) => setVendorForm({ ...vendorForm, trades: e.target.value })}
-                    placeholder="M, E, P"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="vendorMaterials">Materials (comma-separated)</Label>
-                  <Input
-                    id="vendorMaterials"
-                    value={vendorForm.materials}
-                    onChange={(e) => setVendorForm({ ...vendorForm, materials: e.target.value })}
-                    placeholder="Drywall, Studs, Paint"
-                  />
-                </div>
               </div>
             </div>
             <DialogFooter>
