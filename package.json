@@ -9,6 +9,7 @@
   "author": "GC Legacy Construction",
   "license": "ISC",
   "scripts": {
+    "prebuild": "prisma generate",
     "build": "nest build",
     "start": "nest start",
     "start:dev": "nest start --watch",
