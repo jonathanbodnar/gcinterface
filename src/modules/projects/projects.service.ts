@@ -111,14 +111,26 @@ export class ProjectsService {
 
   async listAvailableTakeoffJobs() {
     // Fetch list of available jobs from takeoff database
+    console.log('🔍 listAvailableTakeoffJobs called');
+    console.log('🔍 TakeoffPrisma client exists?', !!this.takeoffPrisma.client);
+    console.log('🔍 TAKEOFF_DATABASE_URL set?', !!process.env.TAKEOFF_DATABASE_URL);
+    
     if (!this.takeoffPrisma.client) {
+      console.warn('⚠️ Takeoff database client not initialized');
       return {
         jobs: [],
         message: 'Takeoff database not configured',
+        debug: {
+          clientExists: !!this.takeoffPrisma.client,
+          envVarSet: !!process.env.TAKEOFF_DATABASE_URL,
+          envVarValue: process.env.TAKEOFF_DATABASE_URL ? 'Set (hidden)' : 'Not set',
+        },
       };
     }
 
     try {
+      console.log('🔍 Attempting to query takeoff database...');
+      
       // First, let's see all jobs regardless of status to debug
       const jobs = await this.takeoffPrisma.$queryRaw`
         SELECT 
@@ -131,6 +143,8 @@ export class ProjectsService {
         ORDER BY "createdAt" DESC
         LIMIT 50
       `;
+      
+      console.log(`✅ Found ${jobs.length} jobs in takeoff database`);
 
       // Get already imported job IDs
       const importedProjects = await this.prisma.project.findMany({
