@@ -16,16 +16,30 @@ export class ProjectsService {
     }
 
     const takeoffJob = await this.takeoffPrisma.$queryRaw`
-      SELECT * FROM "jobs" WHERE id = ${takeoffJobId}
+      SELECT j.*, f.filename
+      FROM "jobs" j
+      LEFT JOIN "files" f ON j."fileId" = f.id
+      WHERE j.id = ${takeoffJobId}
     `;
 
     if (!takeoffJob || takeoffJob.length === 0) {
       throw new NotFoundException('Takeoff job not found');
     }
 
-    // For now, we'll need to fetch related data separately
-    // In production, you'd want to use proper Prisma queries with a compatible schema
     const jobData = takeoffJob[0];
+
+    // Get features to calculate total area
+    let totalSF = 0;
+    try {
+      const features: any[] = await this.takeoffPrisma.$queryRaw`
+        SELECT * FROM "features" 
+        WHERE "jobId" = ${takeoffJobId} 
+        AND type = 'ROOM'
+      `;
+      totalSF = features.reduce((sum, f) => sum + (f.area || 0), 0);
+    } catch (error) {
+      console.warn('Could not calculate total SF:', error.message);
+    }
 
     // Create project in GC Interface database
     const project = await this.prisma.project.create({
@@ -35,17 +49,6 @@ export class ProjectsService {
         takeoffJobId: takeoffJobId,
         status: 'SCOPE_DIAGNOSIS',
         createdById: userId,
-      },
-    });
-
-    // Calculate total square footage from rooms (simplified for now)
-    // In production, fetch features from takeoff DB
-    const totalSF = jobData.totalArea || 0;
-
-    // Update project with calculated data
-    await this.prisma.project.update({
-      where: { id: project.id },
-      data: {
         totalSF: totalSF,
       },
     });
@@ -82,7 +85,10 @@ export class ProjectsService {
     }
 
     const takeoffJob = await this.takeoffPrisma.$queryRaw`
-      SELECT * FROM "jobs" WHERE id = ${project.takeoffJobId}
+      SELECT j.*, f.filename
+      FROM "jobs" j
+      LEFT JOIN "files" f ON j."fileId" = f.id
+      WHERE j.id = ${project.takeoffJobId}
     `;
 
     return {
@@ -131,16 +137,17 @@ export class ProjectsService {
     try {
       console.log('🔍 Attempting to query takeoff database...');
       
-      // First, let's see all jobs regardless of status to debug
+      // Query jobs from gclegacy database
       const jobs = await this.takeoffPrisma.$queryRaw`
         SELECT 
-          id, 
-          filename,
-          status,
-          "createdAt",
-          "updatedAt"
-        FROM "jobs"
-        ORDER BY "createdAt" DESC
+          j.id, 
+          f.filename,
+          j.status,
+          j."createdAt",
+          j."updatedAt"
+        FROM "jobs" j
+        LEFT JOIN "files" f ON j."fileId" = f.id
+        ORDER BY j."createdAt" DESC
         LIMIT 50
       `;
       
