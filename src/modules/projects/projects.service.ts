@@ -16,7 +16,7 @@ export class ProjectsService {
     }
 
     const takeoffJob = await this.takeoffPrisma.$queryRaw`
-      SELECT * FROM "Job" WHERE id = ${takeoffJobId}
+      SELECT * FROM "jobs" WHERE id = ${takeoffJobId}
     `;
 
     if (!takeoffJob || takeoffJob.length === 0) {
@@ -82,7 +82,7 @@ export class ProjectsService {
     }
 
     const takeoffJob = await this.takeoffPrisma.$queryRaw`
-      SELECT * FROM "Job" WHERE id = ${project.takeoffJobId}
+      SELECT * FROM "jobs" WHERE id = ${project.takeoffJobId}
     `;
 
     return {
@@ -119,15 +119,15 @@ export class ProjectsService {
     }
 
     try {
+      // First, let's see all jobs regardless of status to debug
       const jobs = await this.takeoffPrisma.$queryRaw`
         SELECT 
           id, 
           filename,
           status,
           "createdAt",
-          "totalArea"
-        FROM "Job"
-        WHERE status = 'COMPLETED'
+          "updatedAt"
+        FROM "jobs"
         ORDER BY "createdAt" DESC
         LIMIT 50
       `;
