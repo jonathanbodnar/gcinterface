@@ -1,11 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService, TakeoffPrismaService } from '@/common/prisma/prisma.service';
+import { MaterialsService } from '../materials/materials.service';
+import * as XLSX from 'xlsx';
 
 @Injectable()
 export class VendorsService {
   constructor(
     private prisma: PrismaService,
     private takeoffPrisma: TakeoffPrismaService,
+    private materialsService: MaterialsService,
   ) {}
 
   async matchVendorsToMaterials(projectId: string) {
@@ -28,112 +31,96 @@ export class VendorsService {
     const materialsByTrade = this.groupMaterialsByTrade(bomItems);
 
     // Get vendors by trade and proximity
-    const vendors = await this.getVendorsByProximity(project.location, materialsByTrade);
+    const vendors = await this.getVendorsByProximity(project.location);
 
     return {
       materialsNeeded: materialsByTrade,
       availableVendors: vendors,
-      matchingResults: this.calculateMaterialCoverage(materialsByTrade, vendors),
+      coverageAnalysis: this.calculateMaterialCoverage(materialsByTrade, vendors),
     };
   }
 
-  private groupMaterialsByTrade(materials: any[]) {
-    const groups = {
-      'M': [], // Mechanical
-      'P': [], // Plumbing
-      'E': [], // Electrical
-      'A': [], // Architectural
-    };
-
-    for (const material of materials) {
-      // Determine trade based on SKU, category, or CSI division
-      const trade = this.identifyTrade(material.sku || material.description || material.category);
-      if (groups[trade]) {
-        groups[trade].push(material);
-      } else {
-        groups['A'].push(material); // Default to architectural
+  private groupMaterialsByTrade(bomItems: any[]) {
+    const byTrade: Record<string, any[]> = {};
+    
+    bomItems.forEach(item => {
+      const trade = this.identifyTrade(item);
+      if (!byTrade[trade]) {
+        byTrade[trade] = [];
       }
-    }
-
-    return groups;
-  }
-
-  private identifyTrade(sku: string): string {
-    // Identify trade from SKU prefix or material type
-    if (sku.includes('PIPE') || sku.includes('WC-') || sku.includes('LAV-') || sku.includes('PLUMB')) {
-      return 'P';
-    }
-    if (sku.includes('DUCT') || sku.includes('RTU-') || sku.includes('HVAC') || sku.includes('DIFFUSER')) {
-      return 'M';
-    }
-    if (sku.includes('LED-') || sku.includes('ELECT') || sku.includes('WIRE') || sku.includes('PANEL')) {
-      return 'E';
-    }
-    return 'A'; // Architectural default
-  }
-
-  private async getVendorsByProximity(location: string, materialsByTrade: any) {
-    // Get all active vendors
-    const vendors = await this.prisma.vendor.findMany({
-      where: { active: true },
+      byTrade[trade].push({
+        description: item.description,
+        quantity: item.finalQty,
+        uom: item.uom,
+      });
     });
 
-    // Filter and sort by proximity
-    // TODO: Implement actual proximity calculation using Google Maps API
-    
-    return vendors;
+    return byTrade;
   }
 
-  private calculateMaterialCoverage(materialsNeeded: any, vendors: any[]) {
-    // Calculate which materials each vendor can supply
-    const coverage = {};
+  private identifyTrade(item: any): string {
+    // Identify trade from CSI division or category
+    if (item.csiDivision) {
+      const division = item.csiDivision.substring(0, 2);
+      const tradeMap: Record<string, string> = {
+        '09': 'A', // Finishes
+        '22': 'P', // Plumbing
+        '23': 'M', // HVAC
+        '26': 'E', // Electrical
+        '27': 'E',
+        '28': 'E',
+      };
+      if (tradeMap[division]) return tradeMap[division];
+    }
 
-    for (const vendor of vendors) {
-      const canSupply = [];
-      
-      for (const trade of vendor.trades) {
-        if (materialsNeeded[trade]) {
-          canSupply.push(...materialsNeeded[trade]);
+    // Fallback to category
+    const category = (item.category || '').toLowerCase();
+    if (category.includes('plumb')) return 'P';
+    if (category.includes('hvac') || category.includes('mechanical')) return 'M';
+    if (category.includes('electric')) return 'E';
+    
+    return 'A'; // Default to architectural
+  }
+
+  private async getVendorsByProximity(projectLocation: string) {
+    // For now, return all active vendors
+    // TODO: Implement Google Maps Distance Matrix API for actual proximity
+    return this.prisma.vendor.findMany({
+      where: { active: true },
+      orderBy: { rating: 'desc' },
+    });
+  }
+
+  private calculateMaterialCoverage(materialsByTrade: Record<string, any[]>, vendors: any[]) {
+    // Calculate what percentage of materials can be covered by vendors
+    const totalMaterials = Object.values(materialsByTrade).reduce((sum, items) => sum + items.length, 0);
+    
+    const coverage = vendors.map(vendor => {
+      let coveredCount = 0;
+      vendor.trades?.forEach((trade: string) => {
+        if (materialsByTrade[trade]) {
+          coveredCount += materialsByTrade[trade].length;
         }
-      }
-
-      coverage[vendor.id] = {
+      });
+      
+      return {
         vendorId: vendor.id,
         vendorName: vendor.name,
-        canSupplyCount: canSupply.length,
-        materials: canSupply,
+        coverage: totalMaterials > 0 ? (coveredCount / totalMaterials) * 100 : 0,
+        coveredMaterials: coveredCount,
       };
-    }
+    });
 
     return coverage;
   }
 
   async createVendor(data: any) {
-    return this.prisma.vendor.create({
-      data,
-    });
-  }
-
-  async bulkImportVendors(vendorsData: any[]) {
-    // Import vendors from Excel upload
-    const created = [];
-
-    for (const vendorData of vendorsData) {
-      const vendor = await this.prisma.vendor.create({
-        data: vendorData,
-      });
-      created.push(vendor);
-    }
-
-    return {
-      imported: created.length,
-      vendors: created,
-    };
+    return this.prisma.vendor.create({ data });
   }
 
   async listVendors(filters?: { trade?: string; proximity?: string }) {
     const where: any = { active: true };
-
+    
     if (filters?.trade) {
       where.trades = {
         has: filters.trade,
@@ -144,5 +131,114 @@ export class VendorsService {
       where,
       orderBy: { rating: 'desc' },
     });
+  }
+
+  async bulkImportVendors(vendorsData: any[]) {
+    // Import multiple vendors from Excel
+    const imported = [];
+    
+    for (const vendorData of vendorsData) {
+      const vendor = await this.createVendor(vendorData);
+      imported.push(vendor);
+    }
+
+    return {
+      imported: imported.length,
+      vendors: imported,
+    };
+  }
+
+  async getVendor(id: string) {
+    return this.prisma.vendor.findUnique({
+      where: { id },
+    });
+  }
+
+  async updateVendor(id: string, data: any) {
+    return this.prisma.vendor.update({
+      where: { id },
+      data,
+    });
+  }
+
+  async uploadMaterialCatalog(vendorId: string, file: Express.Multer.File) {
+    if (!file) {
+      throw new Error('No file provided');
+    }
+
+    try {
+      // Parse CSV/Excel file
+      const workbook = XLSX.read(file.buffer, { type: 'buffer' });
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const data = XLSX.utils.sheet_to_json(worksheet);
+
+      const vendor = await this.prisma.vendor.findUnique({
+        where: { id: vendorId },
+      });
+
+      if (!vendor) {
+        throw new Error('Vendor not found');
+      }
+
+      const createdMaterials = [];
+      const materialNames = [];
+      const errors = [];
+
+      for (const row of data as any[]) {
+        try {
+          // Map columns flexibly
+          const materialData = {
+            name: row.name || row.Name || row.Material || row.MATERIAL || row.product || row.Product,
+            description: row.description || row.Description || row.name,
+            trade: row.trade || row.Trade || vendor.trades[0] || 'A',
+            category: row.category || row.Category || row.type,
+            sku: row.sku || row.SKU || row.code || row.Code,
+            manufacturer: row.manufacturer || row.Manufacturer || row.brand,
+            model: row.model || row.Model,
+            uom: row.uom || row.UOM || row.unit || row.Unit || 'EA',
+            unitCost: row.unitCost || row.unit_cost || row.cost || row.price ? parseFloat(row.unitCost || row.unit_cost || row.cost || row.price) : null,
+          };
+
+          if (!materialData.name) {
+            errors.push({ row, error: 'Missing material name' });
+            continue;
+          }
+
+          // Create or update material in materials database
+          const material = await this.materialsService.createOrUpdateMaterial(materialData);
+          createdMaterials.push(material);
+          materialNames.push(material.name);
+        } catch (error) {
+          errors.push({ row, error: error.message });
+        }
+      }
+
+      // Update vendor with new materials
+      const existingMaterials = vendor.materials || [];
+      const allMaterials = [...new Set([...existingMaterials, ...materialNames])];
+
+      await this.prisma.vendor.update({
+        where: { id: vendorId },
+        data: {
+          materials: allMaterials,
+        },
+      });
+
+      return {
+        success: true,
+        vendor: vendor.name,
+        materialsCreated: createdMaterials.length,
+        materialsLinked: materialNames.length,
+        totalMaterials: allMaterials.length,
+        errors: errors.length,
+        details: {
+          created: createdMaterials.map(m => ({ id: m.id, name: m.name, trade: m.trade })),
+          errors,
+        },
+      };
+    } catch (error) {
+      throw new Error(`Failed to parse material catalog: ${error.message}`);
+    }
   }
 }
