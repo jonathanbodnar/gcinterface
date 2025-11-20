@@ -12,6 +12,7 @@ import Templates from './pages/Templates';
 import VendorMatching from './pages/VendorMatching';
 import RFQManagement from './pages/RFQManagement';
 import QuoteComparison from './pages/QuoteComparison';
+import Contracts from './pages/Contracts';
 import type { ReactNode } from 'react';
 import './App.css';
 
@@ -82,6 +83,11 @@ function App() {
             <Route path="/templates" element={
               <ProtectedRoute>
                 <Templates />
+              </ProtectedRoute>
+            } />
+            <Route path="/contracts/:projectId" element={
+              <ProtectedRoute>
+                <Contracts />
               </ProtectedRoute>
             } />
           </Routes>

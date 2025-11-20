@@ -22,6 +22,50 @@ export class SubcontractsService {
     });
   }
 
+  async listByProject(projectId: string) {
+    const subcontracts = await this.prisma.subcontract.findMany({
+      where: { projectId },
+      include: {
+        vendor: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            type: true,
+          },
+        },
+        awardedByUser: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return subcontracts;
+  }
+
+  async getSubcontractDetails(subcontractId: string) {
+    const subcontract = await this.prisma.subcontract.findUnique({
+      where: { id: subcontractId },
+      include: {
+        project: true,
+        vendor: true,
+        awardedByUser: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    return subcontract;
+  }
+
   async createSubcontract(projectId: string, vendorId: string, quoteId: string, userId: string) {
     // Get quote and vendor
     const quote = await this.prisma.quote.findUnique({
