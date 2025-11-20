@@ -344,34 +344,40 @@ async function seedMockProject() {
 
   const vendors = [];
   for (const vendorData of vendorsData) {
-    const vendor = await prisma.vendor.upsert({
-      where: {
-        // Use email as unique identifier for upsert
-        email: vendorData.email,
-      },
-      update: {},
-      create: {
-        name: vendorData.name,
-        type: vendorData.type as any,
-        email: vendorData.email,
-        phone: vendorData.phone,
-        address: vendorData.address,
-        trades: vendorData.trades,
-        materials: vendorData.materials || [],
-        alternates: vendorData.alternates?.split(',').map(a => a.trim()) || [],
-        isRequired: vendorData.isRequired || false,
-        requiredFor: vendorData.requiredFor || [],
-        services: vendorData.services || [],
-        crewSize: vendorData.crewSize,
-        equipmentList: vendorData.equipmentList || [],
-        certifications: vendorData.certifications || [],
-        insurance: vendorData.insurance,
-        serviceRadius: vendorData.serviceRadius,
-        rating: vendorData.rating,
-        active: true,
-      },
-    });
-    vendors.push(vendor);
+    try {
+      const vendor = await prisma.vendor.upsert({
+        where: {
+          // Use email as unique identifier for upsert
+          email: vendorData.email,
+        },
+        update: {},
+        create: {
+          name: vendorData.name,
+          type: vendorData.type as any,
+          email: vendorData.email,
+          phone: vendorData.phone,
+          address: vendorData.address,
+          trades: vendorData.trades,
+          materials: vendorData.materials || [],
+          alternates: typeof vendorData.alternates === 'string' 
+            ? vendorData.alternates.split(',').map(a => a.trim()) 
+            : (vendorData.alternates || []),
+          isRequired: vendorData.isRequired || false,
+          requiredFor: vendorData.requiredFor || [],
+          services: vendorData.services || [],
+          crewSize: vendorData.crewSize || null,
+          equipmentList: vendorData.equipmentList || [],
+          certifications: vendorData.certifications || [],
+          insurance: vendorData.insurance || null,
+          serviceRadius: vendorData.serviceRadius || null,
+          rating: vendorData.rating || 0,
+          active: true,
+        },
+      });
+      vendors.push(vendor);
+    } catch (error) {
+      console.error(`Failed to create vendor ${vendorData.name}:`, error.message);
+    }
   }
   console.log(`  ✓ ${vendors.length} vendors created (${vendors.filter(v => v.type === 'MATERIAL_SUPPLIER').length} suppliers, ${vendors.filter(v => v.type === 'SUBCONTRACTOR').length} contractors)`);
 
