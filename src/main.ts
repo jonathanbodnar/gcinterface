@@ -19,7 +19,7 @@ async function bootstrap() {
 
   // API prefix (exclude root, health, migrate, and seed endpoints)
   app.setGlobalPrefix('api', {
-    exclude: ['/', 'health', 'migrate', 'seed-mock-project'],
+    exclude: ['/', 'health', 'migrate', 'seed-mock-project', 'seed-email-templates'],
   });
 
   // CORS

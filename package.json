@@ -22,6 +22,7 @@
     "seed": "ts-node prisma/seed.ts",
     "seed:mock-project": "ts-node prisma/seed-mock-project.ts",
     "seed:mock-reset": "ts-node prisma/seed-mock-project.ts --reset-only",
+    "seed:templates": "ts-node prisma/seed-email-templates.ts",
     "analyze:excel": "node analyze-references.js"
   },
   "prisma": {

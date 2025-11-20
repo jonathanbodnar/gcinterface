@@ -85,4 +85,32 @@ export class AppController {
       };
     }
   }
+
+  @Post('seed-email-templates')
+  @ApiOperation({ summary: 'Seed email templates (admin only)' })
+  async seedEmailTemplates() {
+    try {
+      console.log('📧 Seeding email templates...');
+      const { stdout, stderr } = await execAsync('npm run seed:templates');
+      
+      console.log('✅ Email templates seeded');
+      console.log('STDOUT:', stdout);
+      if (stderr) console.warn('STDERR:', stderr);
+      
+      return {
+        success: true,
+        message: 'Email templates created successfully',
+        output: stdout,
+      };
+    } catch (error) {
+      console.error('❌ Seed failed:', error);
+      return {
+        success: false,
+        message: 'Seed failed',
+        error: error.message,
+        output: error.stdout,
+        errorOutput: error.stderr,
+      };
+    }
+  }
 }
