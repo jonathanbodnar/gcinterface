@@ -6,6 +6,91 @@ import * as xlsx from 'xlsx';
 export class QuotesService {
   constructor(private prisma: PrismaService) {}
 
+  async listByProject(projectId: string) {
+    const quotes = await this.prisma.quote.findMany({
+      where: { projectId },
+      include: {
+        vendor: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            type: true,
+          },
+        },
+        rfq: {
+          select: {
+            id: true,
+            rfqNumber: true,
+          },
+        },
+        _count: {
+          select: {
+            items: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return quotes;
+  }
+
+  async getQuoteDetails(quoteId: string) {
+    const quote = await this.prisma.quote.findUnique({
+      where: { id: quoteId },
+      include: {
+        vendor: true,
+        rfq: true,
+        items: {
+          include: {
+            bomItem: {
+              include: {
+                material: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    return quote;
+  }
+
+  async selectWinner(quoteId: string) {
+    const quote = await this.prisma.quote.update({
+      where: { id: quoteId },
+      data: {
+        status: 'ACCEPTED',
+        acceptedAt: new Date(),
+      },
+    });
+
+    // Reject other quotes for the same project
+    await this.prisma.quote.updateMany({
+      where: {
+        projectId: quote.projectId,
+        id: { not: quoteId },
+        status: 'RECEIVED',
+      },
+      data: {
+        status: 'REJECTED',
+      },
+    });
+
+    // Update project status
+    await this.prisma.project.update({
+      where: { id: quote.projectId },
+      data: { status: 'AWARD_PENDING' },
+    });
+
+    return {
+      success: true,
+      message: 'Quote accepted successfully',
+      quote,
+    };
+  }
+
   async parseQuoteFromEmail(rfqId: string, emailBody: string, attachments?: Buffer[]) {
     // Parse quote from email body or Excel attachment
     let quoteData = null;
