@@ -20,6 +20,8 @@
     "db:studio": "prisma studio",
     "db:seed": "ts-node prisma/seed.ts",
     "seed": "ts-node prisma/seed.ts",
+    "seed:mock-project": "ts-node prisma/seed-mock-project.ts",
+    "seed:mock-reset": "ts-node prisma/seed-mock-project.ts --reset-only",
     "analyze:excel": "node analyze-references.js"
   },
   "prisma": {

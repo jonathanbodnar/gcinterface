@@ -57,4 +57,32 @@ export class AppController {
       };
     }
   }
+
+  @Post('seed-mock-project')
+  @ApiOperation({ summary: 'Seed mock project for testing (admin only)' })
+  async seedMockProject() {
+    try {
+      console.log('🌱 Seeding mock project...');
+      const { stdout, stderr } = await execAsync('npm run seed:mock-project');
+      
+      console.log('✅ Mock project seeded');
+      console.log('STDOUT:', stdout);
+      if (stderr) console.warn('STDERR:', stderr);
+      
+      return {
+        success: true,
+        message: 'Mock project created successfully',
+        output: stdout,
+      };
+    } catch (error) {
+      console.error('❌ Seed failed:', error);
+      return {
+        success: false,
+        message: 'Seed failed',
+        error: error.message,
+        output: error.stdout,
+        errorOutput: error.stderr,
+      };
+    }
+  }
 }
