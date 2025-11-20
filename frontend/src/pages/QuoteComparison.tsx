@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { TrendingUp, ArrowLeft, Upload, FileText, DollarSign, Loader2, CheckCircle2, Trophy, Star } from 'lucide-react';
+import { TrendingUp, ArrowLeft, Upload, FileText, DollarSign, Loader2, Trophy, Star } from 'lucide-react';
 import axios from 'axios';
 import { cn } from '@/lib/utils';
 

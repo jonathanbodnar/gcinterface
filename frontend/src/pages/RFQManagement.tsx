@@ -7,10 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { FileText, ArrowLeft, Plus, Mail, Send, Loader2, CheckCircle2, Clock, XCircle, Calendar } from 'lucide-react';
+import { FileText, ArrowLeft, Plus, Send, Loader2, CheckCircle2, Clock, XCircle } from 'lucide-react';
 import axios from 'axios';
-import { cn } from '@/lib/utils';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 

@@ -8,9 +8,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { FileText, ArrowLeft, Plus, Trophy, Mail, Loader2, CheckCircle2, Award as AwardIcon } from 'lucide-react';
+import { FileText, ArrowLeft, Plus, Trophy, Loader2, CheckCircle2 } from 'lucide-react';
 import axios from 'axios';
-import { cn } from '@/lib/utils';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
