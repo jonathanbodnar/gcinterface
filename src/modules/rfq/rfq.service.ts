@@ -128,13 +128,27 @@ export class RFQService {
       },
     });
 
-    // Get email template
-    const template = await this.prisma.emailTemplate.findFirst({
+    // Get email template based on vendor type
+    const isContractor = rfq.vendor.type === 'SUBCONTRACTOR' || rfq.vendor.type === 'BOTH';
+    const templateName = isContractor ? 'RFQ Template - Subcontractors' : 'RFQ Template - Material Suppliers';
+    
+    let template = await this.prisma.emailTemplate.findFirst({
       where: {
         type: 'RFQ',
+        name: templateName,
         active: true,
       },
     });
+
+    // Fallback to any RFQ template if specific one not found
+    if (!template) {
+      template = await this.prisma.emailTemplate.findFirst({
+        where: {
+          type: 'RFQ',
+          active: true,
+        },
+      });
+    }
 
     // Generate email body
     const emailBody = this.generateRFQEmail(rfq, template);

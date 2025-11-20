@@ -5,15 +5,15 @@ const prisma = new PrismaClient();
 async function seedEmailTemplates() {
   console.log('📧 Seeding email templates...\n');
 
-  // RFQ Template
-  const rfqTemplate = await prisma.emailTemplate.upsert({
+  // RFQ Template for SUPPLIERS (Material Pricing)
+  const rfqSupplierTemplate = await prisma.emailTemplate.upsert({
     where: {
-      id: 'template-rfq-default',
+      id: 'template-rfq-supplier',
     },
     update: {},
     create: {
-      id: 'template-rfq-default',
-      name: 'Default RFQ Template',
+      id: 'template-rfq-supplier',
+      name: 'RFQ Template - Material Suppliers',
       type: 'RFQ',
       subject: 'Request for Quote - {{projectName}} - RFQ #{{rfqNumber}}',
       body: '
@@ -113,7 +113,145 @@ async function seedEmailTemplates() {
       active: true,
     },
   });
-  console.log('✅ RFQ Template created');
+  console.log('✅ RFQ Supplier Template created');
+
+  // RFQ Template for CONTRACTORS (Labor & Installation)
+  const rfqContractorTemplate = await prisma.emailTemplate.upsert({
+    where: {
+      id: 'template-rfq-contractor',
+    },
+    update: {},
+    create: {
+      id: 'template-rfq-contractor',
+      name: 'RFQ Template - Subcontractors',
+      type: 'RFQ',
+      subject: 'Request for Proposal - {{projectName}} - RFQ #{{rfqNumber}}',
+      body: '
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+    .header { background-color: #7c3aed; color: white; padding: 20px; }
+    .content { padding: 20px; }
+    .project-info { background-color: #f3f4f6; padding: 15px; margin: 20px 0; border-radius: 5px; }
+    .scope-box { background-color: #fef3c7; padding: 15px; margin: 20px 0; border-left: 4px solid #f59e0b; }
+    .materials-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    .materials-table th { background-color: #e5e7eb; padding: 12px; text-align: left; border: 1px solid #d1d5db; }
+    .materials-table td { padding: 12px; border: 1px solid #d1d5db; }
+    .materials-table tr:nth-child(even) { background-color: #f9fafb; }
+    .footer { background-color: #f3f4f6; padding: 20px; margin-top: 30px; text-align: center; color: #6b7280; }
+    .important { color: #dc2626; font-weight: bold; }
+    .services-list { background-color: #dbeafe; padding: 15px; margin: 20px 0; border-radius: 5px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Request for Proposal - Subcontract Services</h1>
+    <p>RFQ #{{rfqNumber}}</p>
+  </div>
+  
+  <div class="content">
+    <p>Dear {{vendorName}},</p>
+    
+    <p>We are requesting your competitive proposal for <strong>{{trade}} installation services</strong> on the following project:</p>
+    
+    <div class="project-info">
+      <h3>Project Information</h3>
+      <p><strong>Project Name:</strong> {{projectName}}</p>
+      <p><strong>Location:</strong> {{projectLocation}}</p>
+      <p><strong>Total Area:</strong> {{totalSF}} SF</p>
+      <p><strong>Trade(s):</strong> {{trade}}</p>
+      <p class="important"><strong>Proposal Due Date:</strong> {{dueDate}}</p>
+    </div>
+
+    <div class="scope-box">
+      <h3>Scope of Work</h3>
+      <p><strong>You are responsible for:</strong></p>
+      <ul>
+        <li>Furnishing all labor, equipment, and supervision</li>
+        <li>Installing all materials per project specifications</li>
+        <li>Coordinating with other trades as required</li>
+        <li>Obtaining all necessary permits and inspections</li>
+        <li>Providing warranties per specification</li>
+        <li>Completing all rough-in and final connections</li>
+      </ul>
+    </div>
+
+    <h3>Materials to be Installed</h3>
+    <p>The following materials are included in this scope (you provide installation labor):</p>
+
+    <table class="materials-table">
+      <thead>
+        <tr>
+          <th>Item #</th>
+          <th>Description</th>
+          <th>Quantity</th>
+          <th>Unit</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{materialsTable}}
+      </tbody>
+    </table>
+
+    <div class="services-list">
+      <h3>Services Required</h3>
+      <ul>
+        <li><strong>Installation Labor:</strong> Provide all labor, tools, and equipment</li>
+        <li><strong>Project Schedule:</strong> See attached project schedule</li>
+        <li><strong>Coordination:</strong> Work with other trades (drywall, painting, electrical, etc.)</li>
+        <li><strong>Quality Control:</strong> Testing, balancing, and commissioning as required</li>
+        <li><strong>Clean-up:</strong> Daily clean-up and final punch list completion</li>
+      </ul>
+    </div>
+
+    <h3>Proposal Requirements</h3>
+    <p>Please include in your proposal:</p>
+    <ul>
+      <li><strong>Total Lump Sum Price</strong> for labor and installation</li>
+      <li><strong>Crew size and manpower</strong> you will provide</li>
+      <li><strong>Proposed schedule</strong> with start and completion dates</li>
+      <li><strong>List of equipment</strong> you will provide</li>
+      <li><strong>Insurance certificates</strong> (General Liability $2M, Workers Comp $1M minimum)</li>
+      <li><strong>List of licenses and certifications</strong></li>
+      <li><strong>References</strong> from similar projects</li>
+      <li><strong>Payment terms</strong> you propose</li>
+      <li><strong>Any exclusions or clarifications</strong></li>
+    </ul>
+
+    <h3>Project Schedule</h3>
+    <p><strong>Estimated Start:</strong> {{startDate}}</p>
+    <p><strong>Required Completion:</strong> {{completionDate}}</p>
+    <p>Detailed Gantt chart and project schedule will be provided upon award.</p>
+
+    <h3>How to Submit</h3>
+    <p>Please reply to this email with your proposal by <strong>{{dueDate}}</strong>.</p>
+
+    <p>For questions or site visit scheduling, please contact:</p>
+    <p><strong>{{contactName}}</strong><br/>
+    Project Manager<br/>
+    Email: {{contactEmail}}<br/>
+    Phone: {{contactPhone}}</p>
+
+    <p>We look forward to receiving your proposal.</p>
+
+    <p>Best regards,<br/>
+    {{contactName}}<br/>
+    GC Legacy Construction</p>
+  </div>
+
+  <div class="footer">
+    <p>This RFP was sent via GC Interface - Post-Takeoff Estimation & Procurement Platform</p>
+    <p>RFQ #{{rfqNumber}} | {{projectName}}</p>
+  </div>
+</body>
+</html>
+      ',
+      active: true,
+    },
+  });
+  console.log('✅ RFQ Contractor Template created');
 
   // Award Template
   const awardTemplate = await prisma.emailTemplate.upsert({
@@ -321,7 +459,8 @@ async function seedEmailTemplates() {
 
   console.log('\n' + '='.repeat(60));
   console.log('📧 Email templates seeded successfully!\n');
-  console.log(`✅ RFQ Template: ${rfqTemplate.name}`);
+  console.log(`✅ RFQ Supplier Template: ${rfqSupplierTemplate.name}`);
+  console.log(`✅ RFQ Contractor Template: ${rfqContractorTemplate.name}`);
   console.log(`✅ Award Template: ${awardTemplate.name}`);
   console.log(`✅ Non-Award Template: ${nonAwardTemplate.name}`);
   console.log('='.repeat(60));
