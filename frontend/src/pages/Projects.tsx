@@ -229,7 +229,11 @@ export default function Projects() {
                 ) : (
                   <div className="space-y-4">
                     {projects.map((project: any) => (
-                      <Card key={project.id} className="hover:shadow-md transition-shadow">
+                      <Card 
+                        key={project.id} 
+                        className="hover:shadow-md transition-shadow cursor-pointer"
+                        onClick={() => navigate(`/projects/${project.id}`)}
+                      >
                         <CardContent className="p-6">
                           <div className="flex items-start justify-between">
                             <div className="flex-1">
@@ -258,7 +262,10 @@ export default function Projects() {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => navigate(`/vendor-matching/${project.id}`)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigate(`/vendor-matching/${project.id}`);
+                                }}
                               >
                                 <Users className="w-4 h-4 mr-2" />
                                 Match Vendors
@@ -266,7 +273,10 @@ export default function Projects() {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => navigate(`/rfq/${project.id}`)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigate(`/rfq/${project.id}`);
+                                }}
                               >
                                 <FileText className="w-4 h-4 mr-2" />
                                 Manage RFQs

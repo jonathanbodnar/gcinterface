@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Projects from './pages/Projects';
+import ProjectDetail from './pages/ProjectDetail';
 import Materials from './pages/Materials';
 import Vendors from './pages/Vendors';
 import RulesMarkups from './pages/RulesMarkups';
@@ -41,6 +42,11 @@ function App() {
             <Route path="/projects" element={
               <ProtectedRoute>
                 <Projects />
+              </ProtectedRoute>
+            } />
+            <Route path="/projects/:id" element={
+              <ProtectedRoute>
+                <ProjectDetail />
               </ProtectedRoute>
             } />
             <Route path="/vendor-matching/:projectId" element={
