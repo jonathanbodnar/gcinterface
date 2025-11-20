@@ -61,7 +61,7 @@ export class QuotesService {
     const quote = await this.prisma.quote.update({
       where: { id: quoteId },
       data: {
-        status: 'ACCEPTED',
+        status: 'AWARDED',
         acceptedAt: new Date(),
       },
     });
@@ -74,7 +74,7 @@ export class QuotesService {
         status: 'RECEIVED',
       },
       data: {
-        status: 'REJECTED',
+        status: 'DECLINED',
       },
     });
 
