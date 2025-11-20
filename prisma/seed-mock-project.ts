@@ -170,6 +170,7 @@ async function seedMockProject() {
     bomItems.push(bomItem);
   }
   console.log(`  ✓ ${bomItems.length} BOM items created`);
+  console.log('\n💰 Updating estimate totals...');
 
   // Update estimate totals
   const totalMaterialCost = bomItems.reduce((sum, item) => sum + item.totalCost, 0);
@@ -182,9 +183,11 @@ async function seedMockProject() {
       confidenceScore: bomItems.reduce((sum, item) => sum + item.confidence, 0) / bomItems.length,
     },
   });
+  console.log(`  ✓ Estimate updated: $${totalMaterialCost.toLocaleString()}`);
 
   // Create vendors that match the materials
   console.log('\n👥 Creating vendors...');
+  console.log('🧹 Cleaning existing test vendors...');
   
   // Delete existing test vendors first
   await prisma.vendor.deleteMany({
