@@ -62,7 +62,6 @@ export class QuotesService {
       where: { id: quoteId },
       data: {
         status: 'AWARDED',
-        acceptedAt: new Date(),
       },
     });
 
@@ -74,7 +73,7 @@ export class QuotesService {
         status: 'RECEIVED',
       },
       data: {
-        status: 'DECLINED',
+        status: 'REJECTED',
       },
     });
 
