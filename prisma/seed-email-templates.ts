@@ -164,7 +164,7 @@ async function seedEmailTemplates() {
       <p><strong>Project Location:</strong> {{projectLocation}}</p>
       <p><strong>Contract Number:</strong> {{contractNumber}}</p>
       <p><strong>Trade:</strong> {{trade}}</p>
-      <p class="amount"><strong>Contract Amount:</strong> ${{contractAmount}}</p>
+      <p class="amount"><strong>Contract Amount:</strong> $\{{contractAmount}}</p>
       <p><strong>Payment Terms:</strong> {{paymentTerms}}</p>
     </div>
 
