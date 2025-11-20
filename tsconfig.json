@@ -26,7 +26,10 @@
   "exclude": [
     "node_modules",
     "dist",
-    "frontend"
+    "frontend",
+    "prisma/seed*.ts",
+    "**/*.spec.ts",
+    "test"
   ]
 }
 
