@@ -185,6 +185,30 @@ async function seedMockProject() {
 
   // Create vendors that match the materials
   console.log('\n👥 Creating vendors...');
+  
+  // Delete existing test vendors first
+  await prisma.vendor.deleteMany({
+    where: {
+      email: {
+        contains: '@',
+        endsWith: '.com',
+      },
+      name: {
+        in: [
+          'ABC Building Supply',
+          'Premier Paint & Coatings',
+          'Bay Area Plumbing Supply',
+          'Ferguson Plumbing Fixtures',
+          'West Coast HVAC Supply',
+          'NorCal Electrical Distributors',
+          'Golden State Contractors',
+          'Pacific Plumbing Contractors',
+          'Bay Mechanical Services',
+          'Elite Electrical Contractors',
+        ],
+      },
+    },
+  });
   const vendorsData = [
     {
       name: 'ABC Building Supply',
