@@ -23,6 +23,59 @@ export class RFQService {
     });
   }
 
+  async listByProject(projectId: string) {
+    const rfqs = await this.prisma.rFQ.findMany({
+      where: { projectId },
+      include: {
+        vendor: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            type: true,
+          },
+        },
+        items: true,
+        _count: {
+          select: {
+            items: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return rfqs;
+  }
+
+  async getRFQDetails(rfqId: string) {
+    const rfq = await this.prisma.rFQ.findUnique({
+      where: { id: rfqId },
+      include: {
+        project: true,
+        vendor: true,
+        items: {
+          include: {
+            bomItem: {
+              include: {
+                material: true,
+              },
+            },
+          },
+        },
+        sentByUser: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    return rfq;
+  }
+
   async createRFQ(projectId: string, vendorId: string, materialIds: string[], userId: string) {
     // Generate RFQ number
     const rfqNumber = `RFQ-${Date.now()}`;
