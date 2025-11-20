@@ -1,11 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService, TakeoffPrismaService } from '@/common/prisma/prisma.service';
+import { BOMGeneratorService } from '../bom/bom-generator.service';
 
 @Injectable()
 export class ProjectsService {
   constructor(
     private prisma: PrismaService,
     private takeoffPrisma: TakeoffPrismaService,
+    private bomGenerator: BOMGeneratorService,
   ) {}
 
   async importFromTakeoff(takeoffJobId: string, userId: string) {
@@ -56,8 +58,30 @@ export class ProjectsService {
     console.log(`✅ Imported takeoff job ${takeoffJobId} as project ${project.id}`);
     console.log(`📐 Total SF: ${totalSF}`);
 
+    // Auto-generate BOM and populate materials database
+    console.log(`🔧 Auto-generating BOM for project ${project.id}...`);
+    let bomSummary = null;
+    try {
+      bomSummary = await this.bomGenerator.generateFromTakeoff(project.id, userId);
+      console.log(`✅ BOM generated: ${bomSummary.totalItems} items, ${bomSummary.totalMaterials} unique materials`);
+      
+      // Update project status
+      await this.prisma.project.update({
+        where: { id: project.id },
+        data: { status: 'BOM_GENERATION' },
+      });
+    } catch (error) {
+      console.error('⚠️ BOM generation failed:', error.message);
+      // Don't fail the import if BOM generation fails
+      bomSummary = {
+        error: error.message,
+        totalItems: 0,
+      };
+    }
+
     return {
       project,
+      bom: bomSummary,
       takeoffData: {
         totalSF,
         disciplines: jobData.disciplines || [],
