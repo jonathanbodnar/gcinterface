@@ -346,24 +346,19 @@ async function seedMockProject() {
   ];
 
   const vendors = [];
-  for (const vendorData of vendorsData) {
+  for (const vendorData of vendorsData as any[]) {
     try {
-      const vendor = await prisma.vendor.upsert({
-        where: {
-          // Use email as unique identifier for upsert
-          email: vendorData.email,
-        },
-        update: {},
-        create: {
+      const vendor = await prisma.vendor.create({
+        data: {
           name: vendorData.name,
-          type: vendorData.type as any,
+          type: vendorData.type,
           email: vendorData.email,
-          phone: vendorData.phone,
-          address: vendorData.address,
+          phone: vendorData.phone || null,
+          address: vendorData.address || null,
           trades: vendorData.trades,
           materials: vendorData.materials || [],
           alternates: typeof vendorData.alternates === 'string' 
-            ? vendorData.alternates.split(',').map(a => a.trim()) 
+            ? vendorData.alternates.split(',').map((a: string) => a.trim()) 
             : (vendorData.alternates || []),
           isRequired: vendorData.isRequired || false,
           requiredFor: vendorData.requiredFor || [],
@@ -378,8 +373,9 @@ async function seedMockProject() {
         },
       });
       vendors.push(vendor);
-    } catch (error) {
-      console.error(`Failed to create vendor ${vendorData.name}:`, error.message);
+      console.log(`    ✓ Created ${vendor.name}`);
+    } catch (error: any) {
+      console.error(`    ✗ Failed to create vendor ${vendorData.name}:`, error.message);
     }
   }
   console.log(`  ✓ ${vendors.length} vendors created (${vendors.filter(v => v.type === 'MATERIAL_SUPPLIER').length} suppliers, ${vendors.filter(v => v.type === 'SUBCONTRACTOR').length} contractors)`);
