@@ -226,11 +226,43 @@ export default function Vendors() {
       }
       setVendorDialog(false);
       loadVendors();
+      loadAllMaterials(); // Reload materials in case new ones were added
     } catch (error) {
       console.error('Failed to save vendor:', error);
       alert('Failed to save vendor');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleMaterialCatalogUpload = async (event: React.ChangeEvent<HTMLInputElement>, vendorId: string) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    setLoading(true);
+    try {
+      const response = await axios.post(`${API_URL}/vendors/${vendorId}/upload-materials`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      
+      alert(`Success! ${response.data.materialsCreated} materials created, ${response.data.materialsLinked} linked to vendor`);
+      loadVendors();
+      loadAllMaterials();
+      
+      // Reload the editing vendor to show updated materials
+      if (editingVendor && editingVendor.id === vendorId) {
+        const vendorResponse = await axios.get(`${API_URL}/vendors/${vendorId}`);
+        openVendorDialog(vendorResponse.data);
+      }
+    } catch (error) {
+      console.error('Failed to upload material catalog:', error);
+      alert('Failed to upload material catalog');
+    } finally {
+      setLoading(false);
+      event.target.value = ''; // Reset file input
     }
   };
 
@@ -538,6 +570,32 @@ export default function Vendors() {
                         Search from materials database or add new materials on-the-fly
                       </p>
                     </div>
+                    {editingVendor && (
+                      <div className="grid gap-2 border-t pt-4">
+                        <Label>Upload Material Catalog (CSV/Excel)</Label>
+                        <div className="flex items-center gap-2">
+                          <Button variant="outline" asChild className="flex-1">
+                            <label htmlFor={`catalog-upload-${editingVendor.id}`} className="cursor-pointer">
+                              <Upload className="w-4 h-4 mr-2" />
+                              Upload Vendor Catalog
+                              <input
+                                id={`catalog-upload-${editingVendor.id}`}
+                                type="file"
+                                accept=".csv,.xlsx,.xls"
+                                className="hidden"
+                                onChange={(e) => handleMaterialCatalogUpload(e, editingVendor.id)}
+                              />
+                            </label>
+                          </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Upload a CSV or Excel file with columns: name, trade, category, sku, manufacturer, cost
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          ✨ Materials will be auto-added to the materials database and linked to this vendor
+                        </p>
+                      </div>
+                    )}
                     <div className="grid gap-2">
                       <Label htmlFor="alternates">Product Alternates (comma-separated)</Label>
                       <Input
