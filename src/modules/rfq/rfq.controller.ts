@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Param, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, UseGuards, Request } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { RFQService } from './rfq.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -9,6 +9,18 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 @ApiBearerAuth()
 export class RFQController {
   constructor(private rfqService: RFQService) {}
+
+  @Get()
+  @ApiOperation({ summary: 'List RFQs for a project' })
+  async listRFQs(@Query('projectId') projectId: string) {
+    return this.rfqService.listByProject(projectId);
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Get RFQ details' })
+  async getRFQ(@Param('id') id: string) {
+    return this.rfqService.getRFQDetails(id);
+  }
 
   @Post('create')
   @ApiOperation({ summary: 'Create new RFQ' })
@@ -25,4 +37,3 @@ export class RFQController {
     return this.rfqService.sendRFQ(id);
   }
 }
-
