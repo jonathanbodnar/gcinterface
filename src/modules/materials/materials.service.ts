@@ -7,31 +7,37 @@ export class MaterialsService {
   constructor(private prisma: PrismaService) {}
 
   async listMaterials(filters?: { trade?: string; category?: string; search?: string }) {
-    const where: any = { active: true };
-    
-    if (filters?.trade) {
-      where.trade = filters.trade;
-    }
-    
-    if (filters?.category) {
-      where.category = filters.category;
-    }
-    
-    if (filters?.search) {
-      where.OR = [
-        { name: { contains: filters.search, mode: 'insensitive' } },
-        { description: { contains: filters.search, mode: 'insensitive' } },
-        { sku: { contains: filters.search, mode: 'insensitive' } },
-      ];
-    }
+    try {
+      const where: any = { active: true };
+      
+      if (filters?.trade) {
+        where.trade = filters.trade;
+      }
+      
+      if (filters?.category) {
+        where.category = filters.category;
+      }
+      
+      if (filters?.search) {
+        where.OR = [
+          { name: { contains: filters.search, mode: 'insensitive' } },
+          { description: { contains: filters.search, mode: 'insensitive' } },
+          { sku: { contains: filters.search, mode: 'insensitive' } },
+        ];
+      }
 
-    return this.prisma.material.findMany({
-      where,
-      orderBy: [
-        { timesUsed: 'desc' }, // Most used first
-        { name: 'asc' },
-      ],
-    });
+      return this.prisma.material.findMany({
+        where,
+        orderBy: [
+          { timesUsed: 'desc' }, // Most used first
+          { name: 'asc' },
+        ],
+      });
+    } catch (error) {
+      console.error('Error listing materials:', error);
+      // Return empty array if materials table doesn't exist yet
+      return [];
+    }
   }
 
   async getMaterial(id: string) {
@@ -107,41 +113,65 @@ export class MaterialsService {
     model?: string;
     specs?: any;
     uom?: string;
+    unitCost?: number;
+    laborHours?: number;
+    wasteFactor?: number;
   }) {
-    // Check if material already exists (by name + trade)
-    const existing = await this.prisma.material.findUnique({
-      where: {
-        name_trade: {
-          name: materialData.name,
-          trade: materialData.trade,
-        },
-      },
-    });
-
-    if (existing) {
-      // Update usage count and last used
-      return this.prisma.material.update({
-        where: { id: existing.id },
-        data: {
-          timesUsed: { increment: 1 },
-          lastUsed: new Date(),
-          // Update specs if new ones provided
-          specs: materialData.specs || existing.specs,
-          description: materialData.description || existing.description,
-          manufacturer: materialData.manufacturer || existing.manufacturer,
-          model: materialData.model || existing.model,
+    try {
+      // Check if material already exists (by name + trade)
+      const existing = await this.prisma.material.findUnique({
+        where: {
+          name_trade: {
+            name: materialData.name,
+            trade: materialData.trade,
+          },
         },
       });
-    }
 
-    // Create new material
-    return this.prisma.material.create({
-      data: {
-        ...materialData,
-        timesUsed: 1,
-        lastUsed: new Date(),
-      },
-    });
+      if (existing) {
+        // Update usage count and last used
+        return this.prisma.material.update({
+          where: { id: existing.id },
+          data: {
+            timesUsed: { increment: 1 },
+            lastUsed: new Date(),
+            // Update fields if new values provided
+            specs: materialData.specs || existing.specs,
+            description: materialData.description || existing.description,
+            manufacturer: materialData.manufacturer || existing.manufacturer,
+            model: materialData.model || existing.model,
+            uom: materialData.uom || existing.uom,
+            unitCost: materialData.unitCost !== undefined ? materialData.unitCost : existing.unitCost,
+            laborHours: materialData.laborHours !== undefined ? materialData.laborHours : existing.laborHours,
+            wasteFactor: materialData.wasteFactor !== undefined ? materialData.wasteFactor : existing.wasteFactor,
+          },
+        });
+      }
+
+      // Create new material
+      return this.prisma.material.create({
+        data: {
+          name: materialData.name,
+          trade: materialData.trade,
+          description: materialData.description,
+          sku: materialData.sku,
+          category: materialData.category,
+          manufacturer: materialData.manufacturer,
+          model: materialData.model,
+          specs: materialData.specs,
+          uom: materialData.uom,
+          unitCost: materialData.unitCost,
+          laborHours: materialData.laborHours,
+          wasteFactor: materialData.wasteFactor || 0.07,
+          timesUsed: 1,
+          lastUsed: new Date(),
+          active: true,
+        },
+      });
+    } catch (error) {
+      console.error('Error creating/updating material:', error);
+      throw new Error(`Failed to create/update material: ${error.message}`);
+    }
   }
 
   async searchMaterials(query: string, limit = 50) {
