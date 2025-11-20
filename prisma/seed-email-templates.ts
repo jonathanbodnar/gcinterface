@@ -16,7 +16,7 @@ async function seedEmailTemplates() {
       name: 'Default RFQ Template',
       type: 'RFQ',
       subject: 'Request for Quote - {{projectName}} - RFQ #{{rfqNumber}}',
-      body: `
+      body: '
 <!DOCTYPE html>
 <html>
 <head>
@@ -109,7 +109,7 @@ async function seedEmailTemplates() {
   </div>
 </body>
 </html>
-      `,
+      ',
       active: true,
     },
   });
@@ -126,7 +126,7 @@ async function seedEmailTemplates() {
       name: 'Default Award Template',
       type: 'AWARD',
       subject: 'Congratulations! Subcontract Award - {{projectName}} - {{contractNumber}}',
-      body: `
+      body: '
 <!DOCTYPE html>
 <html>
 <head>
@@ -231,7 +231,7 @@ async function seedEmailTemplates() {
   </div>
 </body>
 </html>
-      `,
+      ',
       active: true,
     },
   });
@@ -248,7 +248,7 @@ async function seedEmailTemplates() {
       name: 'Default Non-Award Template',
       type: 'NON_AWARD',
       subject: 'Thank You for Your Quote - {{projectName}}',
-      body: `
+      body: '
 <!DOCTYPE html>
 <html>
 <head>
@@ -313,7 +313,7 @@ async function seedEmailTemplates() {
   </div>
 </body>
 </html>
-      `,
+      ',
       active: true,
     },
   });
