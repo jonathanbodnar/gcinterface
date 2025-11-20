@@ -315,20 +315,47 @@ export default function VendorMatching() {
                     </Button>
                     <Button
                       onClick={async () => {
+                        if (selectedVendors.size === 0) {
+                          alert('Please select at least one vendor');
+                          return;
+                        }
+
+                        setLoading(true);
                         try {
                           // Save selected vendors
                           await axios.post(`${API_URL}/projects/${projectId}/selected-vendors`, {
                             vendorIds: Array.from(selectedVendors),
                           });
-                          // Navigate to RFQ page
+
+                          // Get all BOM item IDs for this project
+                          const bomResponse = await axios.get(`${API_URL}/bom?projectId=${projectId}`);
+                          const materialIds = bomResponse.data.items.map((item: any) => item.id);
+
+                          // Create RFQ for each selected vendor
+                          let createdCount = 0;
+                          for (const vendorId of Array.from(selectedVendors)) {
+                            await axios.post(`${API_URL}/rfq/create`, {
+                              projectId,
+                              vendorId,
+                              materialIds, // Include all materials
+                            });
+                            createdCount++;
+                          }
+
+                          alert(`✅ Created ${createdCount} RFQ${createdCount !== 1 ? 's' : ''} successfully!`);
+                          
+                          // Navigate to RFQ page to review and send
                           navigate(`/rfq/${projectId}`);
                         } catch (error) {
-                          console.error('Failed to save vendors:', error);
-                          alert('Failed to save selected vendors');
+                          console.error('Failed to create RFQs:', error);
+                          alert('Failed to create RFQs');
+                        } finally {
+                          setLoading(false);
                         }
                       }}
-                      disabled={selectedVendors.size === 0}
+                      disabled={selectedVendors.size === 0 || loading}
                     >
+                      {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
                       Create RFQs ({selectedVendors.size})
                     </Button>
                   </div>
