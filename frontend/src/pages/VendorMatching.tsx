@@ -38,9 +38,31 @@ export default function VendorMatching() {
 
   const loadVendorMatching = async () => {
     try {
-      const response = await axios.get(`${API_URL}/vendors/match/${projectId}`);
-      setMaterialsNeeded(response.data.materialsNeeded || {});
-      setVendors(response.data.availableVendors || []);
+      // Load BOM items for this project
+      const bomResponse = await axios.get(`${API_URL}/bom?projectId=${projectId}`);
+      const bomItems = bomResponse.data.items || [];
+      
+      // Group materials by trade
+      const grouped: Record<string, any[]> = {};
+      bomItems.forEach((item: any) => {
+        const trade = item.material?.trade || item.category?.substring(0, 1) || 'A';
+        if (!grouped[trade]) {
+          grouped[trade] = [];
+        }
+        grouped[trade].push({
+          id: item.id,
+          description: item.description,
+          qty: item.finalQty || item.quantity,
+          uom: item.uom,
+          category: item.category,
+        });
+      });
+      
+      setMaterialsNeeded(grouped);
+      
+      // Load all vendors
+      const vendorsResponse = await axios.get(`${API_URL}/vendors`);
+      setVendors(vendorsResponse.data || []);
     } catch (error) {
       console.error('Failed to load vendor matching:', error);
     } finally {
@@ -281,16 +303,33 @@ export default function VendorMatching() {
                     <p className="text-sm text-muted-foreground">
                       {selectedVendors.size} vendor{selectedVendors.size !== 1 ? 's' : ''} selected
                     </p>
+                    {totalRemaining > 0 && (
+                      <p className="text-xs text-destructive mt-1">
+                        ⚠️ {totalRemaining} materials still need coverage
+                      </p>
+                    )}
                   </div>
                   <div className="flex gap-2">
                     <Button variant="outline" onClick={() => navigate('/projects')}>
                       Cancel
                     </Button>
                     <Button
-                      onClick={() => navigate(`/rfq/${projectId}`)}
+                      onClick={async () => {
+                        try {
+                          // Save selected vendors
+                          await axios.post(`${API_URL}/projects/${projectId}/selected-vendors`, {
+                            vendorIds: Array.from(selectedVendors),
+                          });
+                          // Navigate to RFQ page
+                          navigate(`/rfq/${projectId}`);
+                        } catch (error) {
+                          console.error('Failed to save vendors:', error);
+                          alert('Failed to save selected vendors');
+                        }
+                      }}
                       disabled={selectedVendors.size === 0}
                     >
-                      Create RFQ ({selectedVendors.size})
+                      Create RFQs ({selectedVendors.size})
                     </Button>
                   </div>
                 </div>

@@ -33,5 +33,20 @@ export class ProjectsController {
   async getProject(@Param('id') id: string) {
     return this.projectsService.getTakeoffData(id);
   }
+
+  @Post(':id/selected-vendors')
+  @ApiOperation({ summary: 'Save selected vendors for project' })
+  async saveSelectedVendors(
+    @Param('id') id: string,
+    @Body() body: { vendorIds: string[] },
+  ) {
+    return this.projectsService.saveSelectedVendors(id, body.vendorIds);
+  }
+
+  @Get(':id/selected-vendors')
+  @ApiOperation({ summary: 'Get selected vendors for project' })
+  async getSelectedVendors(@Param('id') id: string) {
+    return this.projectsService.getSelectedVendors(id);
+  }
 }
 

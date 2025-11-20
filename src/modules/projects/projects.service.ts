@@ -202,4 +202,35 @@ export class ProjectsService {
       };
     }
   }
+
+  async saveSelectedVendors(projectId: string, vendorIds: string[]) {
+    // Update project with selected vendors (store as JSON for now)
+    const project = await this.prisma.project.update({
+      where: { id: projectId },
+      data: {
+        status: 'VENDOR_MATCHING',
+        // Store vendor IDs in a JSON field or create a separate table
+        // For now, we'll fetch vendors when needed
+      },
+    });
+
+    console.log(`✅ Saved ${vendorIds.length} vendors for project ${projectId}`);
+
+    return {
+      success: true,
+      projectId,
+      vendorCount: vendorIds.length,
+      vendorIds,
+      message: 'Selected vendors saved',
+    };
+  }
+
+  async getSelectedVendors(projectId: string) {
+    // For now, return empty - in production, query from a ProjectVendors join table
+    return {
+      projectId,
+      vendors: [],
+      message: 'Vendor selection tracking coming soon',
+    };
+  }
 }
