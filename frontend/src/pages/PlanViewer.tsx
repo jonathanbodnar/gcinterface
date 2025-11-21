@@ -125,17 +125,21 @@ export default function PlanViewerPage() {
     setMeasurements([]);
   };
 
-  // Future: Add measurements from canvas clicks
-  // const addMeasurement = (type: 'length' | 'area' | 'count', value: number, unit: string) => {
-  //   const measurement: Measurement = {
-  //     id: `measure-${Date.now()}`,
-  //     type,
-  //     value,
-  //     unit,
-  //     label: `${type.charAt(0).toUpperCase() + type.slice(1)} ${measurements.filter(m => m.type === type).length + 1}`,
-  //   };
-  //   setMeasurements(prev => [...prev, measurement]);
-  // };
+  const handleMeasurementComplete = (type: string, value: number, points: any[]) => {
+    const measurement: Measurement = {
+      id: `measure-${Date.now()}`,
+      type: type as 'length' | 'area' | 'count',
+      value,
+      unit: type === 'length' ? 'LF' : type === 'area' ? 'SF' : 'items',
+      label: `${type.charAt(0).toUpperCase() + type.slice(1)} ${measurements.filter(m => m.type === type).length + 1}`,
+    };
+    setMeasurements(prev => [...prev, measurement]);
+    
+    // Reset tool after measurement (except count tool)
+    if (type !== 'count') {
+      setActiveTool('none');
+    }
+  };
 
   if (loading) {
     return (
@@ -189,10 +193,12 @@ export default function PlanViewerPage() {
               <PlanViewer
                 pdfUrl={pdfUrl}
                 currentPage={currentPage}
-                onPageChange={setCurrentPage}
-                highlights={highlights}
-                activeHighlightId={selectedMaterialId}
-              />
+              onPageChange={setCurrentPage}
+              highlights={highlights}
+              activeHighlightId={selectedMaterialId}
+              activeTool={activeTool}
+              onMeasurementComplete={handleMeasurementComplete}
+            />
             </div>
 
           {/* Materials Panel (40%) */}
