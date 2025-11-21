@@ -29,6 +29,7 @@ import { MaterialsModule } from './modules/materials/materials.module';
     SubcontractsModule,
     AdminModule,
     MaterialsModule,
+    PricingModule,
   ],
   controllers: [AppController],
   providers: [],

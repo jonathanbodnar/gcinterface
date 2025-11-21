@@ -107,9 +107,11 @@ model Material {
   model        String?
   specs        Json? // All specifications from takeoff
   
-  // Pricing & Labor (configured by admin)
-  unitCost     Float?
+  // Pricing: NOW VENDOR-SPECIFIC (see VendorMaterialPricing)
+  // REMOVED: unitCost (moved to vendor-specific pricing)
   uom          String? // Unit of measure
+  
+  // Labor (admin configured, vendor-agnostic)
   laborHours   Float? // Hours per unit
   wasteFactor  Float  @default(0.07) // 7% default waste
   
@@ -131,9 +133,48 @@ model Material {
 
   // Relations
   bomItems     BOM[]
+  vendorPricing VendorMaterialPricing[]
 
   @@unique([name, trade]) // Prevent duplicates by name+trade
   @@map("materials")
+}
+
+// Vendor-Specific Material Pricing
+model VendorMaterialPricing {
+  id              String @id @default(cuid())
+  vendorId        String
+  materialId      String
+  
+  // Pricing
+  unitCost        Float
+  uom             String? // Should match material.uom
+  
+  // Terms
+  leadTimeDays    Int?
+  minimumOrder    Float?
+  discountTiers   Json? // [{qty: 1000, discount: 0.05}]
+  
+  // Validity
+  effectiveDate   DateTime @default(now())
+  expiryDate      DateTime?
+  lastQuoteDate   DateTime? // When this price was last seen in a quote
+  
+  // Source tracking
+  quotedBy        String? // User who entered/approved
+  sourceQuoteId   String? // Quote ID where this price came from
+  
+  active          Boolean @default(true)
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  vendor          Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  material        Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  
+  @@unique([vendorId, materialId])
+  @@index([materialId])
+  @@index([vendorId])
+  @@map("vendor_material_pricing")
 }
 
 // ============================================================================
@@ -293,6 +334,7 @@ model Vendor {
   rfqs        RFQ[]
   quotes      Quote[]
   subcontracts Subcontract[]
+  materialPricing VendorMaterialPricing[]
 
   @@map("vendors")
 }
