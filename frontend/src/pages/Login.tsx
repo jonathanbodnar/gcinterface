@@ -57,11 +57,13 @@ export default function Login() {
       <Card className="w-full max-w-md shadow-xl">
         <CardHeader className="space-y-1 text-center">
           <div className="flex justify-center mb-4">
-            <div className="w-16 h-16 bg-primary rounded-xl flex items-center justify-center">
-              <Building2 className="w-8 h-8 text-primary-foreground" />
-            </div>
+            <img 
+              src="/logo.png" 
+              alt="GC Legacy Construction" 
+              className="h-20 w-auto"
+            />
           </div>
-          <CardTitle className="text-3xl font-bold">GC Interface</CardTitle>
+          <CardTitle className="text-3xl font-bold">GC Legacy</CardTitle>
           <CardDescription className="text-base">
             Post-Takeoff Estimation & Procurement
           </CardDescription>

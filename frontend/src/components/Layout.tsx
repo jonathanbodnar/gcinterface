@@ -37,7 +37,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <nav className="border-b bg-card sticky top-0 z-50 shadow-sm">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
-            <div className="flex items-center space-x-1">
+            <div className="flex items-center space-x-4">
+              {/* Logo */}
+              <img 
+                src="/logo.png" 
+                alt="GC Legacy" 
+                className="h-10 w-auto"
+              />
+              
+              {/* Navigation Items */}
+              <div className="flex items-center space-x-1">
               {navItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = location.pathname === item.path;
@@ -56,6 +65,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   </Button>
                 );
               })}
+              </div>
             </div>
 
             <div className="flex items-center gap-2">
