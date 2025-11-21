@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,13 +7,12 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Package, Plus, Upload, Search, Loader2, ExternalLink, Star, TrendingUp } from 'lucide-react';
+import { Package, Plus, Upload, Search, Loader2, ExternalLink, Star, TrendingUp, Mail } from 'lucide-react';
 import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 export default function Materials() {
-  const navigate = useNavigate();
   const [materials, setMaterials] = useState<any[]>([]);
   const [filteredMaterials, setFilteredMaterials] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
