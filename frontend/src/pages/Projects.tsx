@@ -19,7 +19,7 @@ export default function Projects() {
   const [jobsLoading, setJobsLoading] = useState(false);
   const [importingJobId, setImportingJobId] = useState<string | null>(null);
   const [error, setError] = useState('');
-  const [activeTab, setActiveTab] = useState('available');
+  const [activeTab, setActiveTab] = useState('imported');
   const navigate = useNavigate();
 
   const loadProjects = async () => {
@@ -98,13 +98,13 @@ export default function Projects() {
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList>
-            <TabsTrigger value="available">
-              <Upload className="w-4 h-4 mr-2" />
-              Available Takeoffs ({availableJobs.filter(j => !j.isImported).length})
-            </TabsTrigger>
             <TabsTrigger value="imported">
               <FolderKanban className="w-4 h-4 mr-2" />
               Imported Projects ({projects.length})
+            </TabsTrigger>
+            <TabsTrigger value="available">
+              <Upload className="w-4 h-4 mr-2" />
+              Available Takeoffs ({availableJobs.filter(j => !j.isImported).length})
             </TabsTrigger>
           </TabsList>
 
