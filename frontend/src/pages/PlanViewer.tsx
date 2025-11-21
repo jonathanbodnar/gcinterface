@@ -90,7 +90,7 @@ export default function PlanViewerPage() {
     
     // Generate mock highlights for demo
     // In production, these would come from feature locations in the database
-    const mockHighlights = pageMaterials.map((material, index) => {
+    const mockHighlights = pageMaterials.map((material: any, index: number) => {
       const yOffset = 50 + (index * 80); // Stagger vertically
       const xOffset = 100 + (index % 3) * 150; // Distribute horizontally
       
@@ -125,16 +125,17 @@ export default function PlanViewerPage() {
     setMeasurements([]);
   };
 
-  const addMeasurement = (type: 'length' | 'area' | 'count', value: number, unit: string) => {
-    const measurement: Measurement = {
-      id: `measure-${Date.now()}`,
-      type,
-      value,
-      unit,
-      label: `${type.charAt(0).toUpperCase() + type.slice(1)} ${measurements.filter(m => m.type === type).length + 1}`,
-    };
-    setMeasurements(prev => [...prev, measurement]);
-  };
+  // Future: Add measurements from canvas clicks
+  // const addMeasurement = (type: 'length' | 'area' | 'count', value: number, unit: string) => {
+  //   const measurement: Measurement = {
+  //     id: `measure-${Date.now()}`,
+  //     type,
+  //     value,
+  //     unit,
+  //     label: `${type.charAt(0).toUpperCase() + type.slice(1)} ${measurements.filter(m => m.type === type).length + 1}`,
+  //   };
+  //   setMeasurements(prev => [...prev, measurement]);
+  // };
 
   if (loading) {
     return (

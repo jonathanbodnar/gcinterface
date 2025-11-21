@@ -15,13 +15,6 @@ interface SVGOverlayProps {
   activeHighlightId?: string | null;
 }
 
-const tradeColors: Record<string, string> = {
-  M: '#ef4444', // Red for Mechanical
-  P: '#3b82f6', // Blue for Plumbing
-  E: '#22c55e', // Green for Electrical
-  A: '#eab308', // Yellow for Architectural
-};
-
 export default function SVGOverlay({ width, height, highlights, activeHighlightId }: SVGOverlayProps) {
   if (!width || !height) return null;
 
