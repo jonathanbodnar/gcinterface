@@ -3,24 +3,43 @@ import * as pdfjsLib from 'pdfjs-dist';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ZoomIn, ZoomOut, ChevronLeft, ChevronRight, Maximize2, RotateCw } from 'lucide-react';
+import SVGOverlay from './SVGOverlay';
 
 // Set up PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+
+interface HighlightArea {
+  id: string;
+  type: 'rectangle' | 'polygon' | 'line' | 'point';
+  coordinates: { x: number; y: number; width?: number; height?: number; points?: string };
+  color: string;
+  label?: string;
+}
 
 interface PlanViewerProps {
   pdfUrl: string;
   onPageChange?: (pageNumber: number) => void;
   currentPage?: number;
+  highlights?: HighlightArea[];
+  activeHighlightId?: string | null;
 }
 
-export default function PlanViewer({ pdfUrl, onPageChange, currentPage = 1 }: PlanViewerProps) {
+export default function PlanViewer({ 
+  pdfUrl, 
+  onPageChange, 
+  currentPage = 1,
+  highlights = [],
+  activeHighlightId = null,
+}: PlanViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [pdfDoc, setPdfDoc] = useState<any>(null);
   const [pageNum, setPageNum] = useState(currentPage);
   const [pageCount, setPageCount] = useState(0);
   const [scale, setScale] = useState(1.0);
   const [rotation, setRotation] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
 
   // Load PDF document
   useEffect(() => {
@@ -49,6 +68,9 @@ export default function PlanViewer({ pdfUrl, onPageChange, currentPage = 1 }: Pl
       
       canvas.height = viewport.height;
       canvas.width = viewport.width;
+      
+      // Store canvas size for overlay
+      setCanvasSize({ width: viewport.width, height: viewport.height });
 
       const renderContext = {
         canvasContext: context,
@@ -119,14 +141,22 @@ export default function PlanViewer({ pdfUrl, onPageChange, currentPage = 1 }: Pl
         </div>
       </div>
 
-      {/* PDF Canvas */}
+      {/* PDF Canvas with Overlay */}
       <div className="flex-1 overflow-auto bg-muted/30 p-4">
-        <div className="flex items-center justify-center min-h-full">
+        <div className="flex items-center justify-center min-h-full" ref={containerRef}>
           {loading ? (
             <div className="text-muted-foreground">Loading PDF...</div>
           ) : (
-            <Card className="shadow-lg">
+            <Card className="shadow-lg relative">
               <canvas ref={canvasRef} className="max-w-full h-auto" />
+              {canvasSize.width > 0 && (
+                <SVGOverlay
+                  width={canvasSize.width}
+                  height={canvasSize.height}
+                  highlights={highlights}
+                  activeHighlightId={activeHighlightId}
+                />
+              )}
             </Card>
           )}
         </div>

@@ -18,9 +18,18 @@ export default function PlanViewerPage() {
   const [materialsOnPage, setMaterialsOnPage] = useState<any[]>([]);
   const [selectedMaterialId, setSelectedMaterialId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [highlights, setHighlights] = useState<any[]>([]);
 
   // Mock PDF URL - in production, this would come from the project
   const pdfUrl = 'https://mozilla.github.io/pdf.js/web/compressed.tracemonkey-pldi-09.pdf';
+
+  // Trade colors for highlighting
+  const tradeColors: Record<string, string> = {
+    M: '#ef4444', // Red
+    P: '#3b82f6', // Blue
+    E: '#22c55e', // Green
+    A: '#eab308', // Yellow
+  };
 
   useEffect(() => {
     loadProjectData();
@@ -65,16 +74,38 @@ export default function PlanViewerPage() {
     }));
 
     setMaterialsOnPage(pageMaterials);
+    
+    // Generate mock highlights for demo
+    // In production, these would come from feature locations in the database
+    const mockHighlights = pageMaterials.map((material, index) => {
+      const yOffset = 50 + (index * 80); // Stagger vertically
+      const xOffset = 100 + (index % 3) * 150; // Distribute horizontally
+      
+      return {
+        id: material.id,
+        type: 'rectangle' as const,
+        coordinates: {
+          x: xOffset,
+          y: yOffset,
+          width: 120,
+          height: 60,
+        },
+        color: tradeColors[material.trade] || tradeColors.A,
+        label: material.description.substring(0, 20),
+      };
+    });
+    
+    setHighlights(mockHighlights);
   };
 
   const handleMaterialHover = (materialId: string | null) => {
     setSelectedMaterialId(materialId);
-    // TODO: Highlight on PDF overlay
+    // Highlighting now works via SVGOverlay component
   };
 
   const handleMaterialClick = (materialId: string) => {
     setSelectedMaterialId(materialId);
-    // TODO: Zoom to material location on PDF
+    // TODO: Zoom to material location on PDF (Phase 3)
   };
 
   if (loading) {
@@ -120,6 +151,8 @@ export default function PlanViewerPage() {
               pdfUrl={pdfUrl}
               currentPage={currentPage}
               onPageChange={setCurrentPage}
+              highlights={highlights}
+              activeHighlightId={selectedMaterialId}
             />
           </div>
 
