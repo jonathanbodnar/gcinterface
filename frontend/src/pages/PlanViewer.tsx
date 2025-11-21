@@ -3,9 +3,20 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import PlanViewer from '../components/plan-viewer/PlanViewer';
 import MaterialsPanel from '../components/plan-viewer/MaterialsPanel';
+import MeasurementTools from '../components/plan-viewer/MeasurementTools';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, FileText, Loader2 } from 'lucide-react';
 import axios from 'axios';
+
+type Tool = 'none' | 'length' | 'area' | 'count' | 'scale';
+
+interface Measurement {
+  id: string;
+  type: 'length' | 'area' | 'count';
+  value: number;
+  unit: string;
+  label: string;
+}
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -19,6 +30,8 @@ export default function PlanViewerPage() {
   const [selectedMaterialId, setSelectedMaterialId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [highlights, setHighlights] = useState<any[]>([]);
+  const [activeTool, setActiveTool] = useState<Tool>('none');
+  const [measurements, setMeasurements] = useState<Measurement[]>([]);
 
   // Mock PDF URL - in production, this would come from the project
   const pdfUrl = 'https://mozilla.github.io/pdf.js/web/compressed.tracemonkey-pldi-09.pdf';
@@ -108,6 +121,21 @@ export default function PlanViewerPage() {
     // TODO: Zoom to material location on PDF (Phase 3)
   };
 
+  const handleClearMeasurements = () => {
+    setMeasurements([]);
+  };
+
+  const addMeasurement = (type: 'length' | 'area' | 'count', value: number, unit: string) => {
+    const measurement: Measurement = {
+      id: `measure-${Date.now()}`,
+      type,
+      value,
+      unit,
+      label: `${type.charAt(0).toUpperCase() + type.slice(1)} ${measurements.filter(m => m.type === type).length + 1}`,
+    };
+    setMeasurements(prev => [...prev, measurement]);
+  };
+
   if (loading) {
     return (
       <Layout>
@@ -144,17 +172,27 @@ export default function PlanViewerPage() {
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 flex min-h-0">
-          {/* PDF Viewer (60%) */}
-          <div className="w-[60%]">
-            <PlanViewer
-              pdfUrl={pdfUrl}
-              currentPage={currentPage}
-              onPageChange={setCurrentPage}
-              highlights={highlights}
-              activeHighlightId={selectedMaterialId}
-            />
-          </div>
+        <div className="flex-1 flex min-h-0 flex-col">
+          {/* Measurement Tools */}
+          <MeasurementTools
+            activeTool={activeTool}
+            onToolChange={setActiveTool}
+            measurements={measurements}
+            onClearMeasurements={handleClearMeasurements}
+          />
+
+          {/* PDF Viewer and Materials Panel */}
+          <div className="flex-1 flex min-h-0">
+            {/* PDF Viewer (60%) */}
+            <div className="w-[60%]">
+              <PlanViewer
+                pdfUrl={pdfUrl}
+                currentPage={currentPage}
+                onPageChange={setCurrentPage}
+                highlights={highlights}
+                activeHighlightId={selectedMaterialId}
+              />
+            </div>
 
           {/* Materials Panel (40%) */}
           <div className="w-[40%]">
@@ -165,6 +203,7 @@ export default function PlanViewerPage() {
               onMaterialClick={handleMaterialClick}
               selectedMaterialId={selectedMaterialId}
             />
+            </div>
           </div>
         </div>
       </div>
