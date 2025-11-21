@@ -45,30 +45,8 @@ export class PricingController {
   @Get('vendors/:vendorId/catalog')
   @ApiOperation({ summary: 'Get vendor\'s complete pricing catalog' })
   async getVendorCatalog(@Param('vendorId') vendorId: string) {
-    const pricing = await this.prisma.vendorMaterialPricing.findMany({
-      where: { vendorId, active: true },
-      include: {
-        material: {
-          select: {
-            id: true,
-            name: true,
-            trade: true,
-            category: true,
-          },
-        },
-      },
-      orderBy: {
-        updatedAt: 'desc',
-      },
-    });
-
-    return {
-      vendorId,
-      materialCount: pricing.length,
-      catalog: pricing,
-    };
+    // Delegate to service
+    return this.pricingService.getVendorCatalog(vendorId);
   }
-
-  private prisma = this.pricingService['prisma']; // Access prisma from service
 }
 

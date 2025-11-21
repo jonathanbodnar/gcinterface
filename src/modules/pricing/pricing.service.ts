@@ -188,5 +188,31 @@ export class PricingService {
       needsAI: true,
     };
   }
+
+  async getVendorCatalog(vendorId: string) {
+    const pricing = await this.prisma.vendorMaterialPricing.findMany({
+      where: { vendorId, active: true },
+      include: {
+        material: {
+          select: {
+            id: true,
+            name: true,
+            trade: true,
+            category: true,
+            uom: true,
+          },
+        },
+      },
+      orderBy: {
+        updatedAt: 'desc',
+      },
+    });
+
+    return {
+      vendorId,
+      materialCount: pricing.length,
+      catalog: pricing,
+    };
+  }
 }
 
