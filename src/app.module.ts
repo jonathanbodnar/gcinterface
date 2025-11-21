@@ -12,6 +12,7 @@ import { AdminModule } from './modules/admin/admin.module';
 import { BOMModule } from './modules/bom/bom.module';
 import { LaborModule } from './modules/labor/labor.module';
 import { MaterialsModule } from './modules/materials/materials.module';
+import { PricingModule } from './modules/pricing/pricing.module';
 
 @Module({
   imports: [
@@ -31,9 +32,6 @@ import { MaterialsModule } from './modules/materials/materials.module';
     MaterialsModule,
     PricingModule,
   ],
-  controllers: [AppController],
-})
-export class AppModule {}
   controllers: [AppController],
   providers: [],
 })
