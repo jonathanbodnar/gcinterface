@@ -45,6 +45,9 @@ export default function PlanViewer({
   const [loading, setLoading] = useState(true);
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
   const [measurementPoints, setMeasurementPoints] = useState<{x: number, y: number}[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState<{x: number, y: number} | null>(null);
+  const [currentMousePos, setCurrentMousePos] = useState<{x: number, y: number} | null>(null);
 
   // Load PDF document
   useEffect(() => {
@@ -101,40 +104,22 @@ export default function PlanViewer({
   const fitWidth = () => setScale(1.0);
   const rotate = () => setRotation(prev => (prev + 90) % 360);
 
-  const handleCanvasClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
-    console.log('Canvas clicked, active tool:', activeTool);
-    
-    if (activeTool === 'none' || !canvasRef.current) {
-      console.log('No tool active or no canvas');
-      return;
-    }
+  const handleMouseDown = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    if (activeTool === 'none' || !canvasRef.current) return;
 
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
-    
-    console.log('Click coordinates:', x, y);
+
+    console.log('Mouse down at:', x, y, 'Tool:', activeTool);
 
     if (activeTool === 'length') {
-      const newPoints = [...measurementPoints, { x, y }];
-      console.log('Length tool - points:', newPoints.length);
-      setMeasurementPoints(newPoints);
-
-      if (newPoints.length === 2) {
-        // Calculate distance
-        const dx = newPoints[1].x - newPoints[0].x;
-        const dy = newPoints[1].y - newPoints[0].y;
-        const pixels = Math.sqrt(dx * dx + dy * dy);
-        
-        // Mock scale: assume 100 pixels = 10 feet (adjust based on zoom)
-        const feet = (pixels / 100) * 10;
-        
-        console.log('Length measured:', feet, 'LF');
-        onMeasurementComplete?.('length', feet);
-        setMeasurementPoints([]);
-      }
+      setIsDragging(true);
+      setDragStart({ x, y });
+      setCurrentMousePos({ x, y });
     } else if (activeTool === 'area') {
+      // For area, use click-based approach
       const newPoints = [...measurementPoints, { x, y }];
       console.log('Area tool - points:', newPoints.length);
       setMeasurementPoints(newPoints);
@@ -150,18 +135,75 @@ export default function PlanViewer({
         area = Math.abs(area / 2);
         
         // Convert to square feet (mock scale)
-        const sqft = (area / 10000) * 100; // Adjust scale
+        const sqft = (area / 10000) * 100;
         
         console.log('Area measured:', sqft, 'SF');
         onMeasurementComplete?.('area', sqft);
         setMeasurementPoints([]);
       }
     } else if (activeTool === 'count') {
-      // Simple counter - each click increments
+      // Count - each click increments
       const currentCount = measurementPoints.length + 1;
       console.log('Count:', currentCount);
       onMeasurementComplete?.('count', currentCount);
       setMeasurementPoints([...measurementPoints, { x, y }]);
+    }
+  };
+
+  const handleMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isDragging || !canvasRef.current || activeTool !== 'length') return;
+
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+
+    setCurrentMousePos({ x, y });
+  };
+
+  const handleMouseUp = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isDragging || !dragStart || !canvasRef.current) return;
+
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+
+    if (activeTool === 'length') {
+      // Calculate distance
+      const dx = x - dragStart.x;
+      const dy = y - dragStart.y;
+      const pixels = Math.sqrt(dx * dx + dy * dy);
+      
+      // Mock scale: assume 100 pixels = 10 feet
+      const feet = (pixels / 100) * 10;
+      
+      console.log('Length measured:', feet, 'LF');
+      onMeasurementComplete?.('length', feet);
+      
+      // Reset drag state
+      setIsDragging(false);
+      setDragStart(null);
+      setCurrentMousePos(null);
+    }
+  };
+
+  const handleCanvasClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    // Area and count tools use click (not drag)
+    if (activeTool === 'none' || !canvasRef.current) return;
+    if (activeTool === 'length') return; // Length uses drag, not click
+
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    
+    console.log('Click coordinates:', x, y);
+
+    if (activeTool === 'area') {
+      // Area tool logic already handled in mouseDown
+    } else if (activeTool === 'count') {
+      // Count tool logic already handled in mouseDown
     }
   };
 
@@ -222,6 +264,16 @@ export default function PlanViewer({
                   ref={canvasRef} 
                   className="max-w-full h-auto"
                   onClick={handleCanvasClick}
+                  onMouseDown={handleMouseDown}
+                  onMouseMove={handleMouseMove}
+                  onMouseUp={handleMouseUp}
+                  onMouseLeave={() => {
+                    if (isDragging) {
+                      setIsDragging(false);
+                      setDragStart(null);
+                      setCurrentMousePos(null);
+                    }
+                  }}
                   style={{ 
                     cursor: activeTool !== 'none' ? 'crosshair' : 'default',
                     display: 'block'
@@ -229,7 +281,7 @@ export default function PlanViewer({
                 />
                 {activeTool !== 'none' && (
                   <div className="absolute top-2 right-2 bg-blue-600 text-white px-3 py-1 rounded text-sm font-medium shadow-lg">
-                    {activeTool === 'length' && `Click ${measurementPoints.length === 0 ? 'start' : 'end'} point`}
+                    {activeTool === 'length' && (isDragging ? 'Release to measure' : 'Click and drag to measure')}
                     {activeTool === 'area' && `Click point ${measurementPoints.length + 1} of 4`}
                     {activeTool === 'count' && 'Click items to count'}
                   </div>
@@ -251,6 +303,56 @@ export default function PlanViewer({
                     height={canvasSize.height}
                     style={{ zIndex: 20 }}
                   >
+                    {/* Length tool: Show live line while dragging */}
+                    {isDragging && dragStart && currentMousePos && activeTool === 'length' && (
+                      <>
+                        <circle
+                          cx={dragStart.x}
+                          cy={dragStart.y}
+                          r={6}
+                          fill="#3b82f6"
+                          stroke="#ffffff"
+                          strokeWidth={2}
+                        />
+                        <line
+                          x1={dragStart.x}
+                          y1={dragStart.y}
+                          x2={currentMousePos.x}
+                          y2={currentMousePos.y}
+                          stroke="#3b82f6"
+                          strokeWidth={3}
+                          strokeDasharray="5,5"
+                        />
+                        <circle
+                          cx={currentMousePos.x}
+                          cy={currentMousePos.y}
+                          r={6}
+                          fill="#3b82f6"
+                          stroke="#ffffff"
+                          strokeWidth={2}
+                        />
+                        {/* Show live distance */}
+                        <text
+                          x={(dragStart.x + currentMousePos.x) / 2}
+                          y={(dragStart.y + currentMousePos.y) / 2 - 10}
+                          fill="#3b82f6"
+                          fontSize="14"
+                          fontWeight="bold"
+                          textAnchor="middle"
+                          className="drop-shadow"
+                        >
+                          {(() => {
+                            const dx = currentMousePos.x - dragStart.x;
+                            const dy = currentMousePos.y - dragStart.y;
+                            const pixels = Math.sqrt(dx * dx + dy * dy);
+                            const feet = (pixels / 100) * 10;
+                            return `${feet.toFixed(1)} LF`;
+                          })()}
+                        </text>
+                      </>
+                    )}
+                    
+                    {/* Area/Count tools: Show measurement points */}
                     {measurementPoints.map((point, index) => (
                       <circle
                         key={index}
@@ -262,18 +364,6 @@ export default function PlanViewer({
                         strokeWidth={3}
                       />
                     ))}
-                    {measurementPoints.length === 1 && activeTool === 'length' && (
-                      <circle
-                        cx={measurementPoints[0].x}
-                        cy={measurementPoints[0].y}
-                        r={12}
-                        fill="none"
-                        stroke="#3b82f6"
-                        strokeWidth={2}
-                        opacity={0.5}
-                        className="animate-ping"
-                      />
-                    )}
                     {measurementPoints.length >= 2 && activeTool === 'area' && (
                       <polygon
                         points={measurementPoints.map(p => `${p.x},${p.y}`).join(' ')}
