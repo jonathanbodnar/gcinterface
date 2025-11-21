@@ -13,6 +13,7 @@ import axios from 'axios';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 export default function Materials() {
+  const navigate = useNavigate();
   const [materials, setMaterials] = useState<any[]>([]);
   const [filteredMaterials, setFilteredMaterials] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -319,8 +320,9 @@ export default function Materials() {
                           {material.category || 'N/A'}
                         </TableCell>
                         <TableCell className="font-mono text-xs">{material.sku || '-'}</TableCell>
-                        <TableCell>
-                          {material.unitCost ? `$${material.unitCost.toFixed(2)}` : '-'}
+                        <TableCell className="text-sm text-muted-foreground">
+                          {/* Show vendor count instead of price */}
+                          -
                         </TableCell>
                         <TableCell>
                           <Badge variant="outline">{material.timesUsed || 0}x</Badge>
