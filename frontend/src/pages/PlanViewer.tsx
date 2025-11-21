@@ -128,7 +128,6 @@ export default function PlanViewerPage() {
             <MaterialsPanel
               materials={materialsOnPage}
               currentPage={currentPage}
-              totalPages={15}
               onMaterialHover={handleMaterialHover}
               onMaterialClick={handleMaterialClick}
               selectedMaterialId={selectedMaterialId}

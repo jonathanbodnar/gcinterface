@@ -19,7 +19,6 @@ interface Material {
 interface MaterialsPanelProps {
   materials: Material[];
   currentPage: number;
-  totalPages: number;
   onMaterialHover?: (materialId: string | null) => void;
   onMaterialClick?: (materialId: string) => void;
   selectedMaterialId?: string | null;
@@ -49,7 +48,6 @@ const tradeColors: Record<string, string> = {
 export default function MaterialsPanel({
   materials,
   currentPage,
-  totalPages,
   onMaterialHover,
   onMaterialClick,
   selectedMaterialId,
