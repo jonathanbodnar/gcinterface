@@ -23,7 +23,7 @@ interface PlanViewerProps {
   highlights?: HighlightArea[];
   activeHighlightId?: string | null;
   activeTool?: string;
-  onMeasurementComplete?: (type: string, value: number, points: any[]) => void;
+  onMeasurementComplete?: (type: string, value: number) => void;
 }
 
 export default function PlanViewer({ 
