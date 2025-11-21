@@ -366,9 +366,13 @@ export default function Vendors() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    vendors.map((vendor) => (
-                      <TableRow key={vendor.id}>
-                        <TableCell className="font-medium">{vendor.name}</TableCell>
+                      vendors.map((vendor) => (
+                        <TableRow 
+                          key={vendor.id} 
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() => navigate(`/vendors/${vendor.id}`)}
+                        >
+                          <TableCell className="font-medium">{vendor.name}</TableCell>
                         <TableCell>{getVendorTypeBadge(vendor.type)}</TableCell>
                         <TableCell>
                           <div className="flex flex-col gap-1 text-sm text-muted-foreground">
@@ -416,11 +420,18 @@ export default function Vendors() {
                             {vendor.active ? 'Active' : 'Inactive'}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-right">
-                          <Button variant="ghost" size="sm" onClick={() => openVendorDialog(vendor)}>
-                            <Edit2 className="w-4 h-4" />
-                          </Button>
-                        </TableCell>
+                          <TableCell className="text-right">
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openVendorDialog(vendor);
+                              }}
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </Button>
+                          </TableCell>
                       </TableRow>
                     ))
                   )}

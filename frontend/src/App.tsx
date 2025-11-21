@@ -7,6 +7,7 @@ import Projects from './pages/Projects';
 import ProjectDetail from './pages/ProjectDetail';
 import Materials from './pages/Materials';
 import Vendors from './pages/Vendors';
+import VendorProfile from './pages/VendorProfile';
 import RulesMarkups from './pages/RulesMarkups';
 import Templates from './pages/Templates';
 import VendorMatching from './pages/VendorMatching';
@@ -74,6 +75,11 @@ function App() {
             <Route path="/vendors" element={
               <ProtectedRoute>
                 <Vendors />
+              </ProtectedRoute>
+            } />
+            <Route path="/vendors/:id" element={
+              <ProtectedRoute>
+                <VendorProfile />
               </ProtectedRoute>
             } />
             <Route path="/rules" element={
