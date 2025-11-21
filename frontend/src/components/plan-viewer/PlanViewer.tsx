@@ -131,7 +131,7 @@ export default function PlanViewer({
         const feet = (pixels / 100) * 10;
         
         console.log('Length measured:', feet, 'LF');
-        onMeasurementComplete?.('length', feet, newPoints);
+        onMeasurementComplete?.('length', feet);
         setMeasurementPoints([]);
       }
     } else if (activeTool === 'area') {
@@ -153,14 +153,14 @@ export default function PlanViewer({
         const sqft = (area / 10000) * 100; // Adjust scale
         
         console.log('Area measured:', sqft, 'SF');
-        onMeasurementComplete?.('area', sqft, newPoints);
+        onMeasurementComplete?.('area', sqft);
         setMeasurementPoints([]);
       }
     } else if (activeTool === 'count') {
       // Simple counter - each click increments
       const currentCount = measurementPoints.length + 1;
       console.log('Count:', currentCount);
-      onMeasurementComplete?.('count', currentCount, [...measurementPoints, { x, y }]);
+      onMeasurementComplete?.('count', currentCount);
       setMeasurementPoints([...measurementPoints, { x, y }]);
     }
   };
