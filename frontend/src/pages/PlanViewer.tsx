@@ -125,7 +125,7 @@ export default function PlanViewerPage() {
     setMeasurements([]);
   };
 
-  const handleMeasurementComplete = (type: string, value: number) => {
+  const handleMeasurementComplete = (type: string, value: number, points: any[]) => {
     const measurement: Measurement = {
       id: `measure-${Date.now()}`,
       type: type as 'length' | 'area' | 'count',
