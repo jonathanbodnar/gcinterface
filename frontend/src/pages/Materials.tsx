@@ -13,7 +13,6 @@ import axios from 'axios';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 export default function Materials() {
-  const navigate = useNavigate();
   const [materials, setMaterials] = useState<any[]>([]);
   const [filteredMaterials, setFilteredMaterials] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');

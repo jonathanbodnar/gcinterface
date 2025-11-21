@@ -10,11 +10,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { Plus, Upload, Loader2, Edit2, Package, HardHat, Mail, Phone, Building2, Star } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 export default function Vendors() {
+  const navigate = useNavigate();
   const [vendors, setVendors] = useState<any[]>([]);
   const [allMaterials, setAllMaterials] = useState<any[]>([]);
   const [materialOptions, setMaterialOptions] = useState<{ value: string; label: string }[]>([]);

@@ -9,9 +9,8 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ArrowLeft, Mail, Phone, MapPin, Star, Package, DollarSign, Edit2, Plus, Upload, Loader2, TrendingUp } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, MapPin, Star, Package, Edit2, Plus, Upload, Loader2, TrendingUp, FileText, Clock } from 'lucide-react';
 import axios from 'axios';
-import { cn } from '@/lib/utils';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
