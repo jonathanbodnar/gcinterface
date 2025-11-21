@@ -32,6 +32,9 @@ import { MaterialsModule } from './modules/materials/materials.module';
     PricingModule,
   ],
   controllers: [AppController],
+})
+export class AppModule {}
+  controllers: [AppController],
   providers: [],
 })
 export class AppModule {}

@@ -120,13 +120,22 @@ export class QuotesService {
     const rfq = await this.prisma.rFQ.findUnique({
       where: { id: rfqId },
       include: {
+        vendor: true,
         items: {
           include: {
-            bomItem: true,
+            bomItem: {
+              include: {
+                material: true,
+              },
+            },
           },
         },
       },
     });
+
+    if (!rfq) {
+      throw new Error('RFQ not found');
+    }
 
     // Create quote record
     const quote = await this.prisma.quote.create({
@@ -143,12 +152,14 @@ export class QuotesService {
       },
     });
 
-    // Create quote items
+    // Create quote items AND update vendor pricing
+    let pricingUpdates = 0;
     for (const item of quoteData.items) {
       // Match item to BOM item by description or SKU
       const bomItem = this.matchItemToBOM(item, rfq.items.map(ri => ri.bomItem));
 
       if (bomItem) {
+        // Create quote item
         await this.prisma.quoteItem.create({
           data: {
             quoteId: quote.id,
@@ -163,102 +174,55 @@ export class QuotesService {
             notes: item.notes,
           },
         });
+
+        // ✨ Update vendor pricing from quote
+        if (bomItem.materialId && item.unitPrice > 0) {
+          try {
+            await this.prisma.vendorMaterialPricing.upsert({
+              where: {
+                vendorId_materialId: {
+                  vendorId: rfq.vendorId,
+                  materialId: bomItem.materialId,
+                },
+              },
+              update: {
+                unitCost: item.unitPrice,
+                uom: item.uom,
+                lastQuoteDate: new Date(),
+                sourceQuoteId: quote.id,
+                updatedAt: new Date(),
+              },
+              create: {
+                vendorId: rfq.vendorId,
+                materialId: bomItem.materialId,
+                unitCost: item.unitPrice,
+                uom: item.uom,
+                lastQuoteDate: new Date(),
+                sourceQuoteId: quote.id,
+                active: true,
+              },
+            });
+            pricingUpdates++;
+            console.log(`💰 Updated ${rfq.vendor.name}'s price for ${bomItem.description}: $${item.unitPrice}/${item.uom}`);
+          } catch (error) {
+            console.error(`Failed to update vendor pricing for ${bomItem.description}:`, error.message);
+          }
+        }
       }
     }
 
-    // Update RFQ status
-    await this.prisma.rFQ.update({
-      where: { id: rfqId },
-      data: { status: 'RESPONDED' },
-    });
-
-    return quote;
-  }
-
-  private parseExcelQuote(workbook: xlsx.WorkBook): any {
-    // Parse Excel quote format
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const data = xlsx.utils.sheet_to_json(sheet);
-
-    const items = data.map((row: any) => ({
-      description: row['Description'] || row['Item'] || row['Material'],
-      quantity: parseFloat(row['Quantity'] || row['Qty'] || 0),
-      uom: row['UOM'] || row['Unit'] || 'EA',
-      unitPrice: parseFloat(row['Unit Price'] || row['Price'] || 0),
-      totalPrice: parseFloat(row['Total'] || row['Amount'] || 0),
-    }));
-
-    // Find total amount
-    const totalRow = data.find((row: any) => 
-      row['Description']?.toString().toLowerCase().includes('total') ||
-      row['Item']?.toString().toLowerCase().includes('total')
-    );
-
-    const totalAmount = totalRow 
-      ? parseFloat(totalRow['Total'] || totalRow['Amount'] || 0)
-      : items.reduce((sum, item) => sum + item.totalPrice, 0);
+    console.log(`✅ Quote parsed: ${quote.quoteNumber} | ${quoteData.items.length} items | ${pricingUpdates} prices updated`);
 
     return {
-      items,
-      totalAmount,
+      quote,
+      itemsCreated: quoteData.items.length,
+      pricingUpdates,
     };
   }
 
-  private parseEmailBodyQuote(emailBody: string): any {
-    // Simple text parsing for quote data
-    // This is a basic implementation - can be enhanced with NLP
-    const lines = emailBody.split('\n');
-    const items = [];
-    let totalAmount = 0;
-
-    for (const line of lines) {
-      // Try to extract line items
-      const match = line.match(/(.+?)\s+(\d+\.?\d*)\s+(\d+\.?\d*)\s+(\d+\.?\d*)/);
-      if (match) {
-        items.push({
-          description: match[1].trim(),
-          quantity: parseFloat(match[2]),
-          unitPrice: parseFloat(match[3]),
-          totalPrice: parseFloat(match[4]),
-        });
-      }
-
-      // Find total
-      const totalMatch = line.match(/total[:\s]+[\$]?(\d+\.?\d*)/i);
-      if (totalMatch) {
-        totalAmount = parseFloat(totalMatch[1]);
-      }
-    }
-
-    return items.length > 0 ? { items, totalAmount } : null;
-  }
-
-  private matchItemToBOM(item: any, bomItems: any[]) {
-    // Match quote item to BOM item by description similarity
-    const itemDesc = item.description.toLowerCase();
-    
-    for (const bomItem of bomItems) {
-      const bomDesc = bomItem.description.toLowerCase();
-      
-      // Exact match
-      if (itemDesc === bomDesc) {
-        return bomItem;
-      }
-
-      // Partial match (contains key words)
-      const keyWords = itemDesc.split(/\s+/).filter(w => w.length > 3);
-      if (keyWords.some(word => bomDesc.includes(word))) {
-        return bomItem;
-      }
-    }
-
-    return null;
-  }
-
   async compareQuotes(projectId: string) {
-    // Get all quotes for project
     const quotes = await this.prisma.quote.findMany({
-      where: { projectId, status: { not: 'REJECTED' } },
+      where: { projectId },
       include: {
         vendor: true,
         items: {
@@ -269,80 +233,199 @@ export class QuotesService {
       },
     });
 
-    // Get BOM items for comparison
-    const bomItems = await this.prisma.bOM.findMany({
-      where: { projectId },
+    // Group items by BOM item for comparison
+    const itemComparison: any = {};
+
+    quotes.forEach(quote => {
+      quote.items.forEach(item => {
+        const key = item.bomItemId;
+        if (!itemComparison[key]) {
+          itemComparison[key] = {
+            description: item.description,
+            quotes: [],
+          };
+        }
+
+        itemComparison[key].quotes.push({
+          vendor: quote.vendor.name,
+          price: item.unitPrice,
+          total: item.totalPrice,
+          isLowest: false, // Will calculate below
+        });
+      });
     });
 
-    // Build comparison matrix
-    const comparison = {
-      vendors: quotes.map(q => ({
-        vendorId: q.vendorId,
-        vendorName: q.vendor.name,
-        totalAmount: q.totalAmount,
-        itemCount: q.items.length,
-        coverage: (q.items.length / bomItems.length) * 100,
-        hasVE: q.hasVE,
-      })),
-      lineItems: bomItems.map(bomItem => {
-        const quoteItems = quotes
-          .flatMap(q => q.items.map(qi => ({ ...qi, quote: q })))
-          .filter(qi => qi.bomItemId === bomItem.id);
-
-        return {
-          bomItemId: bomItem.id,
-          description: bomItem.description,
-          quantity: bomItem.finalQty,
-          uom: bomItem.uom,
-          quotes: quoteItems.map(qi => ({
-            vendorId: qi.quote.vendorId,
-            vendorName: qi.quote.vendor.name,
-            unitPrice: qi.unitPrice,
-            totalPrice: qi.totalPrice,
-          })),
-          lowestPrice: quoteItems.length > 0 
-            ? Math.min(...quoteItems.map(qi => qi.unitPrice))
-            : null,
-        };
-      }),
-    };
-
-    return comparison;
-  }
-
-  async levelBids(projectId: string) {
-    // Create leveled bid comparison
-    const comparison = await this.compareQuotes(projectId);
-
-    // Calculate leveled totals (using lowest price for each item)
-    const leveledTotal = comparison.lineItems.reduce((sum, item) => {
-      if (item.lowestPrice) {
-        return sum + (item.lowestPrice * item.quantity);
-      }
-      return sum;
-    }, 0);
-
-    // Calculate savings vs each vendor
-    const savings = comparison.vendors.map(vendor => {
-      const vendorQuote = comparison.lineItems
-        .flatMap(li => li.quotes)
-        .filter(q => q.vendorId === vendor.vendorId)
-        .reduce((sum, q) => sum + q.totalPrice, 0);
-
-      return {
-        vendorId: vendor.vendorId,
-        vendorName: vendor.vendorName,
-        quotedTotal: vendor.totalAmount,
-        leveledTotal,
-        savings: vendor.totalAmount - leveledTotal,
-        savingsPercent: ((vendor.totalAmount - leveledTotal) / vendor.totalAmount) * 100,
-      };
+    // Identify lowest price per item
+    Object.values(itemComparison).forEach((item: any) => {
+      const prices = item.quotes.map((q: any) => q.price).filter((p: number) => p > 0);
+      const lowest = Math.min(...prices);
+      item.quotes.forEach((q: any) => {
+        q.isLowest = q.price === lowest;
+      });
     });
 
     return {
-      leveledTotal,
-      savings,
-      comparison,
+      vendors: quotes.map(q => q.vendor.name),
+      items: Object.values(itemComparison),
+    };
+  }
+
+  async levelBids(projectId: string) {
+    const quotes = await this.prisma.quote.findMany({
+      where: { projectId },
+      include: {
+        vendor: true,
+        items: true,
+      },
+    });
+
+    const leveledItems = [];
+    const itemGroups: Record<string, any[]> = {};
+
+    // Group quote items by description
+    quotes.forEach(quote => {
+      quote.items.forEach(item => {
+        if (!itemGroups[item.description]) {
+          itemGroups[item.description] = [];
+        }
+        itemGroups[item.description].push({
+          vendor: quote.vendor.name,
+          price: item.unitPrice,
+          total: item.totalPrice,
+        });
+      });
+    });
+
+    // Find lowest price for each item
+    Object.entries(itemGroups).forEach(([description, items]) => {
+      const prices = items.map(i => i.total).filter(p => p > 0);
+      if (prices.length === 0) return;
+
+      const lowest = Math.min(...prices);
+      const highest = Math.max(...prices);
+      const lowestItem = items.find(i => i.total === lowest);
+
+      leveledItems.push({
+        description,
+        lowestPrice: lowest,
+        highestPrice: highest,
+        lowestVendor: lowestItem?.vendor,
+        savings: highest - lowest,
+      });
+    });
+
+    const totalLowest = leveledItems.reduce((sum, item) => sum + item.lowestPrice, 0);
+    const totalHighest = leveledItems.reduce((sum, item) => sum + item.highestPrice, 0);
+
+    // Find vendor totals
+    const vendorTotals = quotes.map(q => ({
+      vendor: q.vendor.name,
+      total: q.totalAmount,
+    }));
+
+    const lowestVendorTotal = Math.min(...vendorTotals.map(v => v.total));
+    const highestVendorTotal = Math.max(...vendorTotals.map(v => v.total));
+
+    return {
+      leveledItems,
+      lowestTotal: totalLowest,
+      highestTotal: totalHighest,
+      potentialSavings: totalHighest - totalLowest,
+      savingsPercent: ((totalHighest - totalLowest) / totalHighest) * 100,
+      lowestVendor: vendorTotals.find(v => v.total === lowestVendorTotal)?.vendor,
+      highestVendor: vendorTotals.find(v => v.total === highestVendorTotal)?.vendor,
+    };
+  }
+
+  private matchItemToBOM(quoteItem: any, bomItems: any[]): any {
+    // Try exact SKU match first
+    if (quoteItem.sku) {
+      const match = bomItems.find(bi => bi.sku === quoteItem.sku);
+      if (match) return match;
+    }
+
+    // Try description similarity
+    const desc = quoteItem.description.toLowerCase();
+    const match = bomItems.find(bi => {
+      const bomDesc = bi.description.toLowerCase();
+      return bomDesc.includes(desc) || desc.includes(bomDesc);
+    });
+
+    return match;
+  }
+
+  private parseExcelQuote(workbook: xlsx.WorkBook): any {
+    // Parse Excel quote - look for common formats
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const data = xlsx.utils.sheet_to_json(sheet);
+
+    const items = [];
+    let totalAmount = 0;
+
+    for (const row of data as any[]) {
+      // Flexible column mapping
+      const item = {
+        description: row.description || row.Description || row.Item || row.ITEM,
+        quantity: parseFloat(row.quantity || row.Quantity || row.Qty || row.QTY || 0),
+        uom: row.uom || row.UOM || row.Unit || row.UNIT || 'EA',
+        unitPrice: parseFloat(row.unitPrice || row['Unit Price'] || row.price || row.Price || 0),
+        totalPrice: parseFloat(row.totalPrice || row['Total Price'] || row.total || row.Total || 0),
+        sku: row.sku || row.SKU || row.Code,
+      };
+
+      if (item.description && item.unitPrice > 0) {
+        if (!item.totalPrice) {
+          item.totalPrice = item.quantity * item.unitPrice;
+        }
+        items.push(item);
+        totalAmount += item.totalPrice;
+      }
+    }
+
+    if (items.length === 0) return null;
+
+    return {
+      quoteNumber: null,
+      items,
+      totalAmount,
+      hasVE: false,
+    };
+  }
+
+  private parseEmailBodyQuote(emailBody: string): any {
+    // Simple text parsing - look for patterns like:
+    // "VCT Flooring - $3.50/SF - Total: $8,750"
+    // This is very basic - production would use more sophisticated parsing
+
+    const lines = emailBody.split('\n');
+    const items = [];
+    let totalAmount = 0;
+
+    for (const line of lines) {
+      // Look for price patterns
+      const priceMatch = line.match(/\$?([\d,]+\.?\d*)/);
+      if (priceMatch) {
+        const price = parseFloat(priceMatch[1].replace(/,/g, ''));
+        if (price > 0) {
+          items.push({
+            description: line.split('-')[0]?.trim() || 'Unknown item',
+            quantity: 1,
+            uom: 'EA',
+            unitPrice: price,
+            totalPrice: price,
+          });
+          totalAmount += price;
+        }
+      }
+    }
+
+    if (items.length === 0) return null;
+
+    return {
+      quoteNumber: null,
+      items,
+      totalAmount,
+      hasVE: false,
     };
   }
 }
