@@ -169,12 +169,15 @@ export default function ProjectDetail() {
         <Card>
           <CardContent className="pt-6">
             <div className="flex gap-2">
+              <Button onClick={() => navigate(`/projects/${id}/plans`)}>
+                <FileText className="w-4 h-4 mr-2" />
+                View Plans
+              </Button>
               <Button onClick={() => navigate(`/vendor-matching/${id}`)}>
                 <Users className="w-4 h-4 mr-2" />
                 Match Vendors
               </Button>
               <Button variant="outline" onClick={() => navigate(`/rfq/${id}`)}>
-                <FileText className="w-4 h-4 mr-2" />
                 Manage RFQs
               </Button>
               <Button variant="outline" onClick={() => window.print()}>
