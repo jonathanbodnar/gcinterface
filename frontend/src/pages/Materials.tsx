@@ -13,6 +13,7 @@ import axios from 'axios';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 export default function Materials() {
+  const navigate = useNavigate();
   const [materials, setMaterials] = useState<any[]>([]);
   const [filteredMaterials, setFilteredMaterials] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -81,8 +82,15 @@ export default function Materials() {
 
   const viewMaterialDetails = async (materialId: string) => {
     try {
-      const response = await axios.get(`${API_URL}/materials/${materialId}`);
-      setSelectedMaterial(response.data);
+      const [materialResponse, pricingResponse] = await Promise.all([
+        axios.get(`${API_URL}/materials/${materialId}`),
+        axios.get(`${API_URL}/pricing/materials/${materialId}`),
+      ]);
+      
+      setSelectedMaterial({
+        ...materialResponse.data,
+        pricing: pricingResponse.data,
+      });
       setMaterialViewDialog(true);
     } catch (error) {
       console.error('Failed to load material details:', error);
@@ -281,13 +289,13 @@ export default function Materials() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Material Name</TableHead>
-                    <TableHead>Trade</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead>SKU</TableHead>
-                    <TableHead>Unit Cost</TableHead>
-                    <TableHead>Times Used</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                      <TableHead>Material Name</TableHead>
+                      <TableHead>Trade</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead>SKU</TableHead>
+                      <TableHead>Vendor Prices</TableHead>
+                      <TableHead>Times Used</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
