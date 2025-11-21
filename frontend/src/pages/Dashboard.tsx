@@ -15,6 +15,7 @@ export default function Dashboard() {
   const [projects, setProjects] = useState<any[]>([]);
   const [materials, setMaterials] = useState<any[]>([]);
   const [vendors, setVendors] = useState<any[]>([]);
+  const [estimates, setEstimates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -32,6 +33,22 @@ export default function Dashboard() {
       setProjects(projectsRes.data || []);
       setMaterials(materialsRes.data || []);
       setVendors(vendorsRes.data || []);
+
+      // Load BOM data for each project to get real costs
+      const projectEstimates = await Promise.all(
+        (projectsRes.data || []).map(async (project: any) => {
+          try {
+            const bomRes = await axios.get(`${API_URL}/bom?projectId=${project.id}`);
+            return {
+              projectId: project.id,
+              totalCost: bomRes.data.summary?.totalCost || 0,
+            };
+          } catch {
+            return { projectId: project.id, totalCost: 0 };
+          }
+        })
+      );
+      setEstimates(projectEstimates);
     } catch (error) {
       console.error('Failed to load dashboard data:', error);
     } finally {
@@ -39,8 +56,8 @@ export default function Dashboard() {
     }
   };
 
-  // Calculate metrics
-  const totalPipelineValue = projects.reduce((sum, p) => sum + (p.totalSF || 0) * 150, 0); // Estimate $150/SF
+  // Calculate metrics from REAL BOM data
+  const totalPipelineValue = estimates.reduce((sum, e) => sum + e.totalCost, 0);
   const activeProjects = projects.filter(p => !['AWARDED', 'CANCELLED'].includes(p.status));
   const completedProjects = projects.filter(p => p.status === 'AWARDED');
   const avgVendorRating = vendors.length > 0 
@@ -263,7 +280,10 @@ export default function Dashboard() {
                     <div className="flex items-center gap-4">
                       <div className="text-right">
                         <p className="text-sm font-medium">
-                          ${((project.totalSF || 0) * 150).toLocaleString()}
+                          ${(() => {
+                            const estimate = estimates.find(e => e.projectId === project.id);
+                            return (estimate?.totalCost || 0).toLocaleString();
+                          })()}
                         </p>
                         <p className="text-xs text-muted-foreground">estimated</p>
                       </div>
