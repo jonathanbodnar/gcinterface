@@ -137,7 +137,8 @@ export default function Dashboard() {
             <CardContent>
               <div className="space-y-3">
                 {Object.entries(projectsByStatus).map(([status, count]) => {
-                  const percentage = projects.length > 0 ? (count / projects.length) * 100 : 0;
+                  const countNum = Number(count);
+                  const percentage = projects.length > 0 ? (countNum / projects.length) * 100 : 0;
                   const colors: Record<string, string> = {
                     'SCOPE_DIAGNOSIS': 'bg-yellow-500',
                     'BOM_GENERATION': 'bg-blue-500',
@@ -153,7 +154,7 @@ export default function Dashboard() {
                     <div key={status}>
                       <div className="flex items-center justify-between text-sm mb-2">
                         <span className="font-medium">{status.replace(/_/g, ' ')}</span>
-                        <span className="text-muted-foreground">{count} ({percentage.toFixed(0)}%)</span>
+                        <span className="text-muted-foreground">{countNum} ({percentage.toFixed(0)}%)</span>
                       </div>
                       <div className="w-full bg-secondary rounded-full h-2">
                         <div
