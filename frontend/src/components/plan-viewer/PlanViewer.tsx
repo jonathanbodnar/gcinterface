@@ -102,15 +102,23 @@ export default function PlanViewer({
   const rotate = () => setRotation(prev => (prev + 90) % 360);
 
   const handleCanvasClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
-    if (activeTool === 'none' || !canvasRef.current) return;
+    console.log('Canvas clicked, active tool:', activeTool);
+    
+    if (activeTool === 'none' || !canvasRef.current) {
+      console.log('No tool active or no canvas');
+      return;
+    }
 
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
+    
+    console.log('Click coordinates:', x, y);
 
     if (activeTool === 'length') {
       const newPoints = [...measurementPoints, { x, y }];
+      console.log('Length tool - points:', newPoints.length);
       setMeasurementPoints(newPoints);
 
       if (newPoints.length === 2) {
@@ -119,19 +127,18 @@ export default function PlanViewer({
         const dy = newPoints[1].y - newPoints[0].y;
         const pixels = Math.sqrt(dx * dx + dy * dy);
         
-        // Assuming 1 pixel = 1 foot for demo (would use calibrated scale in production)
-        const feet = pixels / 10; // Mock scale: 10 pixels = 1 foot
+        // Mock scale: assume 100 pixels = 10 feet (adjust based on zoom)
+        const feet = (pixels / 100) * 10;
         
-        onMeasurementComplete?.('length', feet, newPoints);
+        console.log('Length measured:', feet, 'LF');
+        onMeasurementComplete?.('length', feet);
         setMeasurementPoints([]);
       }
-    }
-
-    if (activeTool === 'area') {
+    } else if (activeTool === 'area') {
       const newPoints = [...measurementPoints, { x, y }];
+      console.log('Area tool - points:', newPoints.length);
       setMeasurementPoints(newPoints);
       
-      // Double-click or specific key to finish (for now, 4 points = auto-finish)
       if (newPoints.length >= 4) {
         // Calculate area using shoelace formula
         let area = 0;
@@ -143,17 +150,18 @@ export default function PlanViewer({
         area = Math.abs(area / 2);
         
         // Convert to square feet (mock scale)
-        const sqft = area / 100; // Mock: 100 sq pixels = 1 SF
+        const sqft = (area / 10000) * 100; // Adjust scale
         
-        onMeasurementComplete?.('area', sqft, newPoints);
+        console.log('Area measured:', sqft, 'SF');
+        onMeasurementComplete?.('area', sqft);
         setMeasurementPoints([]);
       }
-    }
-
-    if (activeTool === 'count') {
+    } else if (activeTool === 'count') {
       // Simple counter - each click increments
       const currentCount = measurementPoints.length + 1;
-      onMeasurementComplete?.('count', currentCount, [{ x, y }]);
+      console.log('Count:', currentCount);
+      onMeasurementComplete?.('count', currentCount);
+      setMeasurementPoints([...measurementPoints, { x, y }]);
     }
   };
 
@@ -209,64 +217,78 @@ export default function PlanViewer({
             <div className="text-muted-foreground">Loading PDF...</div>
           ) : (
             <Card className="shadow-lg relative">
-              <canvas 
-                ref={canvasRef} 
-                className="max-w-full h-auto cursor-crosshair"
-                onClick={handleCanvasClick}
-                style={{ cursor: activeTool !== 'none' ? 'crosshair' : 'default' }}
-              />
-              {canvasSize.width > 0 && (
-                <>
-                  <SVGOverlay
+              <div className="relative inline-block">
+                <canvas 
+                  ref={canvasRef} 
+                  className="max-w-full h-auto"
+                  onClick={handleCanvasClick}
+                  style={{ 
+                    cursor: activeTool !== 'none' ? 'crosshair' : 'default',
+                    display: 'block'
+                  }}
+                />
+                {activeTool !== 'none' && (
+                  <div className="absolute top-2 right-2 bg-blue-600 text-white px-3 py-1 rounded text-sm font-medium shadow-lg">
+                    {activeTool === 'length' && `Click ${measurementPoints.length === 0 ? 'start' : 'end'} point`}
+                    {activeTool === 'area' && `Click point ${measurementPoints.length + 1} of 4`}
+                    {activeTool === 'count' && 'Click items to count'}
+                  </div>
+                )}
+              </div>
+            {canvasSize.width > 0 && (
+              <>
+                <SVGOverlay
+                  width={canvasSize.width}
+                  height={canvasSize.height}
+                  highlights={highlights}
+                  activeHighlightId={activeHighlightId}
+                />
+                {/* Show measurement points being created */}
+                {measurementPoints.length > 0 && (
+                  <svg
+                    className="absolute top-0 left-0 pointer-events-none"
                     width={canvasSize.width}
                     height={canvasSize.height}
-                    highlights={highlights}
-                    activeHighlightId={activeHighlightId}
-                  />
-                  {/* Show measurement points being created */}
-                  {measurementPoints.length > 0 && (
-                    <svg
-                      className="absolute top-0 left-0 pointer-events-none"
-                      width={canvasSize.width}
-                      height={canvasSize.height}
-                      style={{ zIndex: 20 }}
-                    >
-                      {measurementPoints.map((point, index) => (
-                        <circle
-                          key={index}
-                          cx={point.x}
-                          cy={point.y}
-                          r={5}
-                          fill="#ff0000"
-                          stroke="#ffffff"
-                          strokeWidth={2}
-                        />
-                      ))}
-                      {measurementPoints.length === 2 && activeTool === 'length' && (
-                        <line
-                          x1={measurementPoints[0].x}
-                          y1={measurementPoints[0].y}
-                          x2={measurementPoints[1].x}
-                          y2={measurementPoints[1].y}
-                          stroke="#ff0000"
-                          strokeWidth={2}
-                          strokeDasharray="5,5"
-                        />
-                      )}
-                      {measurementPoints.length >= 3 && activeTool === 'area' && (
-                        <polygon
-                          points={measurementPoints.map(p => `${p.x},${p.y}`).join(' ')}
-                          fill="none"
-                          stroke="#ff0000"
-                          strokeWidth={2}
-                          strokeDasharray="5,5"
-                        />
-                      )}
-                    </svg>
-                  )}
-                </>
-              )}
-            </Card>
+                    style={{ zIndex: 20 }}
+                  >
+                    {measurementPoints.map((point, index) => (
+                      <circle
+                        key={index}
+                        cx={point.x}
+                        cy={point.y}
+                        r={8}
+                        fill="#3b82f6"
+                        stroke="#ffffff"
+                        strokeWidth={3}
+                      />
+                    ))}
+                    {measurementPoints.length === 1 && activeTool === 'length' && (
+                      <circle
+                        cx={measurementPoints[0].x}
+                        cy={measurementPoints[0].y}
+                        r={12}
+                        fill="none"
+                        stroke="#3b82f6"
+                        strokeWidth={2}
+                        opacity={0.5}
+                        className="animate-ping"
+                      />
+                    )}
+                    {measurementPoints.length >= 2 && activeTool === 'area' && (
+                      <polygon
+                        points={measurementPoints.map(p => `${p.x},${p.y}`).join(' ')}
+                        fill="#3b82f6"
+                        fillOpacity={0.2}
+                        stroke="#3b82f6"
+                        strokeWidth={3}
+                        strokeDasharray="5,5"
+                      />
+                    )}
+                  </svg>
+                )}
+              </>
+            )}
+          </Card>
           )}
         </div>
       </div>
