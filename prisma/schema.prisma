@@ -72,6 +72,7 @@ model Project {
   rfqs          RFQ[]
   quotes        Quote[]
   subcontracts  Subcontract[]
+  planPages     PlanPage[]
 
   @@map("projects")
 }
@@ -526,6 +527,66 @@ enum EmailTemplateType {
   AWARD
   NON_AWARD
   CLARIFICATION
+}
+
+// ============================================================================
+// PLAN VIEWER & INTERACTIVE FEATURES
+// ============================================================================
+
+model PlanPage {
+  id          String @id @default(cuid())
+  projectId   String
+  pageNumber  Int
+  fileName    String
+  pdfUrl      String // S3/Storage URL to PDF
+  thumbnail   String? // S3 URL to page thumbnail
+  
+  // Metadata
+  sheetName   String? // "A1.1 - Floor Plan"
+  scale       String? // "1/4\" = 1'-0\""
+  discipline  String? // A, P, M, E
+  
+  // Extracted from takeoff (denormalized for performance)
+  materialsOnPage Json[] // Array of material IDs and summaries
+  featuresOnPage  Int @default(0) // Count of features on this page
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  locations   FeatureLocation[]
+  
+  @@unique([projectId, pageNumber])
+  @@map("plan_pages")
+}
+
+model FeatureLocation {
+  id          String @id @default(cuid())
+  projectId   String
+  planPageId  String
+  featureId   String // Reference to takeoff Feature (read-only)
+  
+  // Geometry on PDF (percentage-based for responsive display)
+  // Coordinates are 0-1 scale (0.25 = 25% from left/top)
+  coordinates Json // { x, y, width, height } or { points: [[x,y], [x,y], ...] }
+  geometryType String // 'rectangle', 'polygon', 'line', 'point'
+  
+  // Links
+  materialId  String? // Links to Material in materials DB
+  bomItemId   String? // Links to BOM item
+  
+  // Visual properties
+  color       String? // Hex color for highlighting
+  label       String? // Display label on hover
+  trade       String? // M, E, P, A
+  
+  createdAt   DateTime @default(now())
+  
+  planPage    PlanPage @relation(fields: [planPageId], references: [id], onDelete: Cascade)
+  
+  @@index([projectId, planPageId])
+  @@index([materialId])
+  @@map("feature_locations")
 }
 
 
