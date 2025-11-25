@@ -31,6 +31,7 @@ export default function VendorMatching() {
   const [vendors, setVendors] = useState<any[]>([]);
   const [selectedVendors, setSelectedVendors] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+  const [vendorRankings, setVendorRankings] = useState<any[]>([]);
 
   useEffect(() => {
     loadVendorMatching();
@@ -60,9 +61,33 @@ export default function VendorMatching() {
       
       setMaterialsNeeded(grouped);
       
-      // Load all vendors
-      const vendorsResponse = await axios.get(`${API_URL}/vendors`);
-      setVendors(vendorsResponse.data || []);
+      // Load vendors with smart ranking
+      try {
+        const rankingResponse = await axios.get(`${API_URL}/vendors/rank/${projectId}`);
+        if (rankingResponse.data.hasData) {
+          setVendorRankings(rankingResponse.data.rankings);
+          // Get full vendor details
+          const vendorsResponse = await axios.get(`${API_URL}/vendors`);
+          const vendorsData = vendorsResponse.data || [];
+          
+          // Merge ranking data with vendor details
+          const rankedVendors = rankingResponse.data.rankings.map((ranking: any) => {
+            const vendor = vendorsData.find((v: any) => v.id === ranking.vendorId);
+            return {
+              ...vendor,
+              ...ranking,
+            };
+          });
+          setVendors(rankedVendors);
+        } else {
+          const vendorsResponse = await axios.get(`${API_URL}/vendors`);
+          setVendors(vendorsResponse.data || []);
+        }
+      } catch (error) {
+        console.log('Smart ranking not available, using basic vendor list');
+        const vendorsResponse = await axios.get(`${API_URL}/vendors`);
+        setVendors(vendorsResponse.data || []);
+      }
     } catch (error) {
       console.error('Failed to load vendor matching:', error);
     } finally {
@@ -231,12 +256,15 @@ export default function VendorMatching() {
                   ) : (
                     vendors.map(vendor => {
                       const isSelected = selectedVendors.has(vendor.id);
+                      const isBestValue = vendor.recommendation === 'RECOMMENDED' && vendor.isBestPrice;
+                      
                       return (
                         <Card
                           key={vendor.id}
                           className={cn(
                             "cursor-pointer transition-all hover:shadow-lg",
-                            isSelected && "ring-2 ring-primary shadow-lg"
+                            isSelected && "ring-2 ring-primary shadow-lg",
+                            isBestValue && "border-green-500 border-2"
                           )}
                           onClick={() => toggleVendor(vendor.id)}
                         >
@@ -245,10 +273,45 @@ export default function VendorMatching() {
                               <div className="flex-1">
                                 <div className="flex items-center gap-3 mb-2">
                                   <h3 className="text-lg font-semibold">{vendor.name}</h3>
+                                  {isBestValue && (
+                                    <Badge className="bg-green-600 gap-1">
+                                      <Trophy className="w-3 h-3" />
+                                      Best Value
+                                    </Badge>
+                                  )}
                                   {isSelected && (
                                     <CheckCircle2 className="w-5 h-5 text-primary" />
                                   )}
                                 </div>
+                                
+                                {vendor.estimatedCost > 0 && (
+                                  <div className="mb-2">
+                                    <p className="text-2xl font-bold text-green-600">
+                                      ${vendor.estimatedCost.toLocaleString()}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">estimated project cost</p>
+                                    {vendor.savingsVsBest > 0 && (
+                                      <p className="text-xs text-orange-600">
+                                        +${vendor.savingsVsBest.toLocaleString()} vs best price
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
+                                
+                                {vendor.coverage !== undefined && (
+                                  <div className="mb-2">
+                                    <div className="flex items-center gap-2 text-sm">
+                                      <span className="text-muted-foreground">Material Coverage:</span>
+                                      <span className="font-semibold">{vendor.coverage.toFixed(0)}%</span>
+                                    </div>
+                                    <div className="w-full bg-secondary rounded-full h-2 mt-1">
+                                      <div
+                                        className="bg-primary h-2 rounded-full transition-all"
+                                        style={{ width: `${vendor.coverage}%` }}
+                                      />
+                                    </div>
+                                  </div>
+                                )}
                                 
                                 <div className="space-y-2 text-sm text-muted-foreground mb-4">
                                   {vendor.email && (
