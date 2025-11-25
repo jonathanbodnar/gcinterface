@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@/common/prisma/prisma.service';
 
-interface QuoteCoverageAnalysis {
+export interface QuoteCoverageAnalysis {
   coveragePercent: number;
   totalRequested: number;
   exactMatches: number;
