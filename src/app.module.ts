@@ -13,6 +13,7 @@ import { BOMModule } from './modules/bom/bom.module';
 import { LaborModule } from './modules/labor/labor.module';
 import { MaterialsModule } from './modules/materials/materials.module';
 import { PricingModule } from './modules/pricing/pricing.module';
+import { WebhooksModule } from './modules/webhooks/webhooks.module';
 
 @Module({
   imports: [
