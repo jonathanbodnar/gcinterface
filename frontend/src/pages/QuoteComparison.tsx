@@ -27,6 +27,7 @@ export default function QuoteComparison() {
   const [selectedRFQ, setSelectedRFQ] = useState<string>('');
   const [quoteText, setQuoteText] = useState('');
   const [activeTab, setActiveTab] = useState('quotes');
+  const [quoteCoverage, setQuoteCoverage] = useState<Record<string, any>>({});
 
   useEffect(() => {
     loadData();
@@ -35,9 +36,22 @@ export default function QuoteComparison() {
   const loadData = async () => {
     setLoading(true);
     try {
-      // Load quotes
+      // Load quotes and coverage
       const quotesResponse = await axios.get(`${API_URL}/quotes?projectId=${projectId}`);
-      setQuotes(quotesResponse.data || []);
+      const quotesData = quotesResponse.data || [];
+      setQuotes(quotesData);
+
+      // Load coverage for each quote
+      const coverageData: Record<string, any> = {};
+      for (const quote of quotesData) {
+        try {
+          const coverageRes = await axios.get(`${API_URL}/quotes/${quote.id}/coverage`);
+          coverageData[quote.id] = coverageRes.data;
+        } catch (error) {
+          console.log(`No coverage data for quote ${quote.id}`);
+        }
+      }
+      setQuoteCoverage(coverageData);
 
       // Load RFQs
       const rfqResponse = await axios.get(`${API_URL}/rfq?projectId=${projectId}`);
@@ -219,11 +233,35 @@ export default function QuoteComparison() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {quotes.map((quote) => (
+                    {quotes.map((quote) => {
+                      const coverage = quoteCoverage[quote.id];
+                      return (
                         <TableRow key={quote.id}>
                           <TableCell className="font-medium">{quote.vendor?.name}</TableCell>
                           <TableCell className="font-mono text-sm">{quote.quoteNumber}</TableCell>
-                          <TableCell>{quote._count?.items || 0} items</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <span>{quote._count?.items || 0} items</span>
+                              {coverage && (
+                                <Badge 
+                                  variant={coverage.coveragePercent >= 90 ? "default" : coverage.coveragePercent >= 70 ? "secondary" : "outline"}
+                                  className="gap-1"
+                                >
+                                  {coverage.coveragePercent.toFixed(0)}% coverage
+                                </Badge>
+                              )}
+                            </div>
+                            {coverage && coverage.alternatives > 0 && (
+                              <div className="text-xs text-yellow-600 mt-1">
+                                🟡 {coverage.alternatives} alternative{coverage.alternatives !== 1 ? 's' : ''}
+                              </div>
+                            )}
+                            {coverage && coverage.missing > 0 && (
+                              <div className="text-xs text-red-600 mt-1">
+                                🔴 {coverage.missing} missing
+                              </div>
+                            )}
+                          </TableCell>
                           <TableCell className="text-right font-semibold">
                             ${quote.totalAmount?.toLocaleString() || 0}
                           </TableCell>
@@ -254,7 +292,8 @@ export default function QuoteComparison() {
                             )}
                           </TableCell>
                         </TableRow>
-                      ))}
+                      );
+                    })}
                     </TableBody>
                   </Table>
                 )}
