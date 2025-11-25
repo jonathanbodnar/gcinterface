@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { QuotesService } from './quotes.service';
+import { QuoteAnalysisService } from './quote-analysis.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('Quotes')
@@ -8,7 +9,22 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class QuotesController {
-  constructor(private quotesService: QuotesService) {}
+  constructor(
+    private quotesService: QuotesService,
+    private quoteAnalysis: QuoteAnalysisService,
+  ) {}
+
+  @Get()
+  @ApiOperation({ summary: 'List quotes for a project' })
+  async listQuotes(@Query('projectId') projectId: string) {
+    return this.quotesService.listByProject(projectId);
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Get quote details' })
+  async getQuote(@Param('id') id: string) {
+    return this.quotesService.getQuoteDetails(id);
+  }
 
   @Post('parse/:rfqId')
   @ApiOperation({ summary: 'Parse quote from email' })
@@ -16,7 +32,6 @@ export class QuotesController {
     @Param('rfqId') rfqId: string,
     @Body() body: { emailBody: string; attachments?: string[] },
   ) {
-    // Convert base64 attachments to buffers if provided
     const attachments = body.attachments?.map(att => Buffer.from(att, 'base64'));
     return this.quotesService.parseQuoteFromEmail(rfqId, body.emailBody, attachments);
   }
@@ -32,5 +47,22 @@ export class QuotesController {
   async levelBids(@Param('projectId') projectId: string) {
     return this.quotesService.levelBids(projectId);
   }
-}
 
+  @Post(':id/select-winner')
+  @ApiOperation({ summary: 'Select winning quote' })
+  async selectWinner(@Param('id') id: string) {
+    return this.quotesService.selectWinner(id);
+  }
+
+  @Get(':id/coverage')
+  @ApiOperation({ summary: 'Analyze quote coverage and alternatives' })
+  async analyzeCoverage(@Param('id') id: string) {
+    return this.quoteAnalysis.analyzeQuoteCoverage(id);
+  }
+
+  @Get('project/:projectId/bid-tracking')
+  @ApiOperation({ summary: 'Get bid tracking metrics for project' })
+  async getBidTracking(@Param('projectId') projectId: string) {
+    return this.quoteAnalysis.getProjectBidTracking(projectId);
+  }
+}
