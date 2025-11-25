@@ -31,6 +31,7 @@ import { PricingModule } from './modules/pricing/pricing.module';
     AdminModule,
     MaterialsModule,
     PricingModule,
+    WebhooksModule,
   ],
   controllers: [AppController],
   providers: [],
