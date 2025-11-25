@@ -59,7 +59,24 @@ model Project {
   // Project details
   planDate    DateTime?
   bidDate     DateTime?
+  dueDate     DateTime? // Admin-set deadline
+  
+  // Workflow status
   status      ProjectStatus @default(SCOPE_DIAGNOSIS)
+  
+  // Business outcome
+  projectOutcome String? // "Awarded", "Lost", "Pending"
+  awardedDate    DateTime?
+  awardedAmount  Float?
+  lostReason     String?
+  
+  // Current stage
+  currentStage   String? // "Collecting Bids", "In Progress", "Completed"
+  
+  // Bid tracking
+  rfqsSent       Int @default(0)
+  quotesReceived Int @default(0)
+  responseRate   Float?
   
   createdById String
   createdAt   DateTime @default(now())
@@ -86,6 +103,20 @@ enum ProjectStatus {
   AWARD_PENDING
   AWARDED
   CANCELLED
+}
+
+enum ProjectOutcome {
+  PENDING
+  AWARDED
+  LOST
+}
+
+enum ProjectStage {
+  COLLECTING_BIDS
+  REVIEWING_BIDS
+  IN_PROGRESS
+  COMPLETED
+  ON_HOLD
 }
 
 // ============================================================================
