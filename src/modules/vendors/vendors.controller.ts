@@ -2,6 +2,7 @@ import { Controller, Get, Post, Put, Body, Param, Query, UseGuards, UploadedFile
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { VendorsService } from './vendors.service';
+import { VendorRankingService } from './vendor-ranking.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('Vendors')
@@ -9,12 +10,21 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class VendorsController {
-  constructor(private vendorsService: VendorsService) {}
+  constructor(
+    private vendorsService: VendorsService,
+    private vendorRanking: VendorRankingService,
+  ) {}
 
   @Get('match/:projectId')
   @ApiOperation({ summary: 'Match vendors to project materials' })
   async matchVendors(@Param('projectId') projectId: string) {
     return this.vendorsService.matchVendorsToMaterials(projectId);
+  }
+
+  @Get('rank/:projectId')
+  @ApiOperation({ summary: 'Rank vendors by price competitiveness for project' })
+  async rankVendors(@Param('projectId') projectId: string) {
+    return this.vendorRanking.getVendorPriceComparison(projectId);
   }
 
   @Get()
