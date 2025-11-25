@@ -4,9 +4,13 @@ import Layout from '../components/Layout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Package, DollarSign, Users, Activity, FileText, Loader2, TrendingUp, AlertCircle } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { ArrowLeft, Package, DollarSign, Users, Activity, FileText, Loader2, TrendingUp, AlertCircle, Trophy } from 'lucide-react';
 import axios from 'axios';
 import { cn } from '@/lib/utils';
 
@@ -20,6 +24,14 @@ export default function ProjectDetail() {
   const [labor, setLabor] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('bom');
+  const [editStatusDialog, setEditStatusDialog] = useState(false);
+  const [statusForm, setStatusForm] = useState({
+    projectOutcome: 'PENDING',
+    dueDate: '',
+    awardedAmount: '',
+    lostReason: '',
+    currentStage: 'COLLECTING_BIDS',
+  });
 
   useEffect(() => {
     loadProjectData();
@@ -105,11 +117,67 @@ export default function ProjectDetail() {
                 {project.clientName && <span>• {project.clientName}</span>}
               </div>
             </div>
-            <Badge className={cn('text-sm', getStatusColor(project.status))}>
-              {project.status?.replace('_', ' ')}
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge className={cn('text-sm', getStatusColor(project.status))}>
+                {project.status?.replace('_', ' ')}
+              </Badge>
+              {project.projectOutcome && (
+                <Badge variant={project.projectOutcome === 'AWARDED' ? 'default' : project.projectOutcome === 'LOST' ? 'secondary' : 'outline'}>
+                  {project.projectOutcome}
+                </Badge>
+              )}
+              <Button size="sm" variant="outline" onClick={() => {
+                setStatusForm({
+                  projectOutcome: project.projectOutcome || 'PENDING',
+                  dueDate: project.dueDate || '',
+                  awardedAmount: project.awardedAmount?.toString() || '',
+                  lostReason: project.lostReason || '',
+                  currentStage: project.currentStage || 'COLLECTING_BIDS',
+                });
+                setEditStatusDialog(true);
+              }}>
+                Update Status
+              </Button>
+            </div>
           </div>
         </div>
+
+        {/* Project Status Info Bar */}
+        {(project.dueDate || project.currentStage || project.rfqsSent > 0) && (
+          <Card>
+            <CardContent className="pt-4">
+              <div className="grid grid-cols-4 gap-4 text-sm">
+                {project.dueDate && (
+                  <div>
+                    <p className="text-muted-foreground">Due Date</p>
+                    <p className="font-semibold">{new Date(project.dueDate).toLocaleDateString()}</p>
+                  </div>
+                )}
+                {project.currentStage && (
+                  <div>
+                    <p className="text-muted-foreground">Current Stage</p>
+                    <p className="font-semibold">{project.currentStage.replace('_', ' ')}</p>
+                  </div>
+                )}
+                {project.rfqsSent > 0 && (
+                  <div>
+                    <p className="text-muted-foreground">RFQs Sent / Quotes Received</p>
+                    <p className="font-semibold">{project.rfqsSent} / {project.quotesReceived || 0}</p>
+                    {project.responseRate !== null && (
+                      <p className="text-xs text-muted-foreground">{project.responseRate.toFixed(0)}% response rate</p>
+                    )}
+                  </div>
+                )}
+                {project.awardedAmount && (
+                  <div>
+                    <p className="text-muted-foreground">Awarded Amount</p>
+                    <p className="font-semibold text-green-600">${project.awardedAmount.toLocaleString()}</p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Stats Cards */}
         <div className="grid gap-4 md:grid-cols-4">
@@ -414,6 +482,102 @@ export default function ProjectDetail() {
             </Card>
           </TabsContent>
         </Tabs>
+
+        {/* Edit Status Dialog */}
+        <Dialog open={editStatusDialog} onOpenChange={setEditStatusDialog}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Update Project Status</DialogTitle>
+              <DialogDescription>Set outcome, stage, and timeline</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label>Project Outcome</Label>
+                  <select
+                    value={statusForm.projectOutcome}
+                    onChange={(e) => setStatusForm({ ...statusForm, projectOutcome: e.target.value })}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="PENDING">Pending</option>
+                    <option value="AWARDED">Awarded</option>
+                    <option value="LOST">Lost</option>
+                  </select>
+                </div>
+                <div className="grid gap-2">
+                  <Label>Current Stage</Label>
+                  <select
+                    value={statusForm.currentStage}
+                    onChange={(e) => setStatusForm({ ...statusForm, currentStage: e.target.value })}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="COLLECTING_BIDS">Collecting Bids</option>
+                    <option value="REVIEWING_BIDS">Reviewing Bids</option>
+                    <option value="IN_PROGRESS">In Progress</option>
+                    <option value="COMPLETED">Completed</option>
+                    <option value="ON_HOLD">On Hold</option>
+                  </select>
+                </div>
+              </div>
+              
+              <div className="grid gap-2">
+                <Label>Due Date</Label>
+                <Input
+                  type="date"
+                  value={statusForm.dueDate}
+                  onChange={(e) => setStatusForm({ ...statusForm, dueDate: e.target.value })}
+                />
+              </div>
+
+              {statusForm.projectOutcome === 'AWARDED' && (
+                <div className="grid gap-2">
+                  <Label>Awarded Amount ($)</Label>
+                  <Input
+                    type="number"
+                    value={statusForm.awardedAmount}
+                    onChange={(e) => setStatusForm({ ...statusForm, awardedAmount: e.target.value })}
+                    placeholder="0.00"
+                  />
+                </div>
+              )}
+
+              {statusForm.projectOutcome === 'LOST' && (
+                <div className="grid gap-2">
+                  <Label>Reason Lost</Label>
+                  <Textarea
+                    value={statusForm.lostReason}
+                    onChange={(e) => setStatusForm({ ...statusForm, lostReason: e.target.value })}
+                    placeholder="Pricing too high, schedule conflict, etc."
+                    rows={3}
+                  />
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setEditStatusDialog(false)}>
+                Cancel
+              </Button>
+              <Button onClick={async () => {
+                try {
+                  await axios.put(`${API_URL}/projects/${id}`, {
+                    projectOutcome: statusForm.projectOutcome,
+                    dueDate: statusForm.dueDate || null,
+                    awardedAmount: statusForm.awardedAmount ? parseFloat(statusForm.awardedAmount) : null,
+                    lostReason: statusForm.lostReason || null,
+                    currentStage: statusForm.currentStage,
+                  });
+                  setEditStatusDialog(false);
+                  loadProjectData();
+                } catch (error) {
+                  console.error('Failed to update status:', error);
+                  alert('Failed to update status');
+                }
+              }}>
+                Save
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </Layout>
   );
