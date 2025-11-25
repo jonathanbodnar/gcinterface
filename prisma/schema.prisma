@@ -489,9 +489,16 @@ model QuoteItem {
   unitPrice   Float
   totalPrice  Float
   
-  // VE alternate
+  // Alternative/Substitution tracking
   isAlternate Boolean @default(false)
-  alternateFor String?
+  alternateFor String? // Original BOM item ID this replaces
+  alternateType String? // "VE", "Equivalent", "Upgrade"
+  manufacturer String? // For tracking brand substitutions
+  model String?
+  
+  // Coverage tracking
+  matchType String? // "EXACT", "ALTERNATIVE", "PARTIAL"
+  matchConfidence Float? // 0-1 score for fuzzy matching
   
   notes       String?
   
