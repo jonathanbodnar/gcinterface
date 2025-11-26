@@ -245,40 +245,60 @@ export class QuotesService {
       },
     });
 
-    // Group items by BOM item for comparison
-    const itemComparison: any = {};
+    if (quotes.length === 0) {
+      return { vendors: [], items: [] };
+    }
 
+    const vendors = quotes.map(q => q.vendor.name);
+    
+    // Get all unique BOM items across all quotes
+    const allBomItemIds = new Set<string>();
     quotes.forEach(quote => {
       quote.items.forEach(item => {
-        const key = item.bomItemId;
-        if (!itemComparison[key]) {
-          itemComparison[key] = {
-            description: item.description,
-            quotes: [],
-          };
-        }
-
-        itemComparison[key].quotes.push({
-          vendor: quote.vendor.name,
-          price: item.unitPrice,
-          total: item.totalPrice,
-          isLowest: false, // Will calculate below
-        });
+        allBomItemIds.add(item.bomItemId);
       });
     });
 
-    // Identify lowest price per item
-    Object.values(itemComparison).forEach((item: any) => {
-      const prices = item.quotes.map((q: any) => q.price).filter((p: number) => p > 0);
-      const lowest = Math.min(...prices);
-      item.quotes.forEach((q: any) => {
-        q.isLowest = q.price === lowest;
+    // Create comparison matrix
+    const itemComparison = Array.from(allBomItemIds).map(bomItemId => {
+      // Find the item description (from any quote that has it)
+      const sampleItem = quotes
+        .flatMap(q => q.items)
+        .find(item => item.bomItemId === bomItemId);
+
+      const description = sampleItem?.description || 'Unknown';
+
+      // Get price from each vendor for this item
+      const vendorQuotes = vendors.map(vendorName => {
+        const quote = quotes.find(q => q.vendor.name === vendorName);
+        const item = quote?.items.find(i => i.bomItemId === bomItemId);
+
+        return {
+          vendor: vendorName,
+          price: item?.unitPrice || 0,
+          total: item?.totalPrice || 0,
+          isLowest: false, // Will calculate below
+        };
       });
+
+      // Identify lowest price
+      const prices = vendorQuotes.map(q => q.price).filter(p => p > 0);
+      if (prices.length > 0) {
+        const lowest = Math.min(...prices);
+        vendorQuotes.forEach(q => {
+          q.isLowest = q.price === lowest && q.price > 0;
+        });
+      }
+
+      return {
+        description,
+        quotes: vendorQuotes,
+      };
     });
 
     return {
-      vendors: quotes.map(q => q.vendor.name),
-      items: Object.values(itemComparison),
+      vendors,
+      items: itemComparison,
     };
   }
 
