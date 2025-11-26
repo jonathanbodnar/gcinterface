@@ -254,15 +254,88 @@ export default function Templates() {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="templateBody">Email Body</Label>
+                <div className="flex items-center justify-between mb-2">
+                  <Label htmlFor="templateBody">Email Body</Label>
+                  <div className="flex gap-1">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        const selection = 'selected text';
+                        setTemplateForm({ ...templateForm, body: templateForm.body + '\n<strong>Bold Text</strong>' });
+                      }}
+                      title="Bold"
+                    >
+                      <strong>B</strong>
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setTemplateForm({ ...templateForm, body: templateForm.body + '\n<em>Italic Text</em>' });
+                      }}
+                      title="Italic"
+                    >
+                      <em>I</em>
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setTemplateForm({ ...templateForm, body: templateForm.body + '\n<ul>\n  <li>List item 1</li>\n  <li>List item 2</li>\n</ul>' });
+                      }}
+                      title="Bullet List"
+                    >
+                      • List
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setTemplateForm({ ...templateForm, body: templateForm.body + '\n<h3>Heading</h3>' });
+                      }}
+                      title="Heading"
+                    >
+                      H
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setTemplateForm({ ...templateForm, body: templateForm.body + '\n<p>Paragraph text here</p>' });
+                      }}
+                      title="Paragraph"
+                    >
+                      ¶
+                    </Button>
+                  </div>
+                </div>
                 <Textarea
                   id="templateBody"
                   value={templateForm.body}
                   onChange={(e) => setTemplateForm({ ...templateForm, body: e.target.value })}
-                  rows={16}
-                  placeholder="Dear {{vendorName}},&#10;&#10;We are requesting a quote for {{projectName}}...&#10;&#10;Available variables: {{projectName}}, {{vendorName}}, {{dueDate}}, {{materialList}}, {{contactName}}"
+                  rows={12}
+                  placeholder="Use HTML tags for formatting:
+<strong>Bold</strong>, <em>Italic</em>
+<h3>Headings</h3>
+<ul><li>Bullet lists</li></ul>
+<p>Paragraphs</p>
+
+Variables: {{projectName}}, {{vendorName}}, {{materialList}}"
                   className="font-mono text-sm"
                 />
+                <div className="border rounded-md p-4 bg-white max-h-80 overflow-auto">
+                  <p className="text-xs font-semibold mb-3 text-gray-600">Live Preview:</p>
+                  <div 
+                    className="prose prose-sm max-w-none"
+                    dangerouslySetInnerHTML={{ __html: templateForm.body }}
+                  />
+                </div>
               </div>
               <div className="bg-muted p-3 rounded-md">
                 <p className="text-xs font-semibold mb-2">Available Variables:</p>
