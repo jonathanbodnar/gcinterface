@@ -262,7 +262,6 @@ export default function Templates() {
                       size="sm"
                       variant="outline"
                       onClick={() => {
-                        const selection = 'selected text';
                         setTemplateForm({ ...templateForm, body: templateForm.body + '\n<strong>Bold Text</strong>' });
                       }}
                       title="Bold"
