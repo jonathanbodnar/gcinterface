@@ -5,7 +5,7 @@ import axios from 'axios';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Users, Package, CheckCircle2, Loader2, ArrowLeft, Mail, Phone, Star, Wrench, Zap, Droplet, Building } from 'lucide-react';
+import { Users, Package, CheckCircle2, Loader2, ArrowLeft, Mail, Phone, Star, Wrench, Zap, Droplet, Building, Trophy } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
@@ -31,7 +31,6 @@ export default function VendorMatching() {
   const [vendors, setVendors] = useState<any[]>([]);
   const [selectedVendors, setSelectedVendors] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
-  const [vendorRankings, setVendorRankings] = useState<any[]>([]);
 
   useEffect(() => {
     loadVendorMatching();
@@ -65,7 +64,6 @@ export default function VendorMatching() {
       try {
         const rankingResponse = await axios.get(`${API_URL}/vendors/rank/${projectId}`);
         if (rankingResponse.data.hasData) {
-          setVendorRankings(rankingResponse.data.rankings);
           // Get full vendor details
           const vendorsResponse = await axios.get(`${API_URL}/vendors`);
           const vendorsData = vendorsResponse.data || [];

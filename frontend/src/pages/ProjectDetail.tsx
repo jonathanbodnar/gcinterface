@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ArrowLeft, Package, DollarSign, Users, Activity, FileText, Loader2, TrendingUp, AlertCircle, Trophy } from 'lucide-react';
+import { ArrowLeft, Package, DollarSign, Users, Activity, FileText, Loader2, TrendingUp, AlertCircle } from 'lucide-react';
 import axios from 'axios';
 import { cn } from '@/lib/utils';
 
