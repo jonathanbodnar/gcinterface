@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { TrendingUp, ArrowLeft, Upload, FileText, DollarSign, Loader2, Trophy, Star } from 'lucide-react';
 import axios from 'axios';
 import { cn } from '@/lib/utils';
@@ -28,6 +29,8 @@ export default function QuoteComparison() {
   const [quoteText, setQuoteText] = useState('');
   const [activeTab, setActiveTab] = useState('quotes');
   const [quoteCoverage, setQuoteCoverage] = useState<Record<string, any>>({});
+  const [detailDialog, setDetailDialog] = useState(false);
+  const [selectedQuote, setSelectedQuote] = useState<any>(null);
 
   useEffect(() => {
     loadData();
@@ -116,6 +119,16 @@ export default function QuoteComparison() {
     } catch (error) {
       console.error('Failed to select winner:', error);
       alert('Failed to select winner');
+    }
+  };
+
+  const viewQuoteDetails = async (quoteId: string) => {
+    try {
+      const response = await axios.get(`${API_URL}/quotes/${quoteId}`);
+      setSelectedQuote(response.data);
+      setDetailDialog(true);
+    } catch (error) {
+      console.error('Failed to load quote details:', error);
     }
   };
 
@@ -236,7 +249,11 @@ export default function QuoteComparison() {
                     {quotes.map((quote) => {
                       const coverage = quoteCoverage[quote.id];
                       return (
-                        <TableRow key={quote.id}>
+                        <TableRow 
+                          key={quote.id}
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() => viewQuoteDetails(quote.id)}
+                        >
                           <TableCell className="font-medium">{quote.vendor?.name}</TableCell>
                           <TableCell className="font-mono text-sm">{quote.quoteNumber}</TableCell>
                           <TableCell>
@@ -284,7 +301,10 @@ export default function QuoteComparison() {
                             {quote.status !== 'ACCEPTED' && quote.status !== 'REJECTED' && (
                               <Button
                                 size="sm"
-                                onClick={() => selectWinner(quote.id)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  selectWinner(quote.id);
+                                }}
                               >
                                 <Trophy className="w-4 h-4 mr-2" />
                                 Select
@@ -480,6 +500,106 @@ export default function QuoteComparison() {
                 {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
                 Parse & Upload
               </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Quote Detail Dialog */}
+        <Dialog open={detailDialog} onOpenChange={setDetailDialog}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Quote Details: {selectedQuote?.quoteNumber || 'N/A'}</DialogTitle>
+              <DialogDescription>
+                {selectedQuote?.vendor?.name}
+              </DialogDescription>
+            </DialogHeader>
+            {selectedQuote && (
+              <div className="grid gap-6 py-4">
+                {/* Quote Summary */}
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <Label className="text-muted-foreground">Total Amount</Label>
+                    <div className="text-3xl font-bold text-green-600">
+                      ${selectedQuote.totalAmount?.toLocaleString() || 0}
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-muted-foreground">Status</Label>
+                    <div>
+                      <Badge variant={getStatusVariant(selectedQuote.status) as any}>
+                        {selectedQuote.status}
+                      </Badge>
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-muted-foreground">Received</Label>
+                    <div className="text-sm">
+                      {new Date(selectedQuote.receivedAt).toLocaleString()}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Materials Table */}
+                <div>
+                  <Label className="text-base font-semibold mb-3 block">
+                    Materials Quoted ({selectedQuote.items?.length || 0} items)
+                  </Label>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Description</TableHead>
+                        <TableHead className="text-right">Quantity</TableHead>
+                        <TableHead>UOM</TableHead>
+                        <TableHead className="text-right">Unit Price</TableHead>
+                        <TableHead className="text-right">Total</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {selectedQuote.items?.map((item: any, idx: number) => (
+                        <TableRow key={idx}>
+                          <TableCell className="font-medium">{item.description}</TableCell>
+                          <TableCell className="text-right">{item.quantity.toFixed(2)}</TableCell>
+                          <TableCell>{item.uom}</TableCell>
+                          <TableCell className="text-right">${item.unitPrice.toFixed(2)}</TableCell>
+                          <TableCell className="text-right font-semibold">
+                            ${item.totalPrice.toLocaleString()}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-right font-bold">Grand Total:</TableCell>
+                        <TableCell className="text-right font-bold text-green-600">
+                          ${selectedQuote.totalAmount?.toLocaleString() || 0}
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {/* VE Notes */}
+                {selectedQuote.hasVE && selectedQuote.veNotes && (
+                  <div>
+                    <Label className="text-base font-semibold mb-2 block">Value Engineering Notes</Label>
+                    <div className="bg-yellow-50 dark:bg-yellow-950 p-4 rounded-md border-l-4 border-yellow-500">
+                      <p className="text-sm whitespace-pre-wrap">{selectedQuote.veNotes}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDetailDialog(false)}>
+                Close
+              </Button>
+              {selectedQuote?.status !== 'ACCEPTED' && selectedQuote?.status !== 'REJECTED' && (
+                <Button onClick={() => {
+                  setDetailDialog(false);
+                  selectWinner(selectedQuote.id);
+                }}>
+                  <Trophy className="w-4 h-4 mr-2" />
+                  Select as Winner
+                </Button>
+              )}
             </DialogFooter>
           </DialogContent>
         </Dialog>
