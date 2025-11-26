@@ -333,37 +333,61 @@ export default function QuoteComparison() {
                   <div className="text-center py-12 text-muted-foreground">
                     <TrendingUp className="w-16 h-16 mx-auto mb-4 opacity-50" />
                     <p>Need at least 2 quotes to compare</p>
+                    <p className="text-xs mt-2">Current quotes: {quotes.length}</p>
+                  </div>
+                ) : comparison.items?.length === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <TrendingUp className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                    <p>No common items to compare</p>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Material</TableHead>
-                          {comparison.vendors?.map((vendor: string) => (
-                            <TableHead key={vendor} className="text-center">{vendor}</TableHead>
-                          ))}
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {comparison.items?.map((item: any, idx: number) => (
-                          <TableRow key={idx}>
-                            <TableCell className="font-medium">{item.description}</TableCell>
-                            {item.quotes?.map((quote: any, qIdx: number) => (
-                              <TableCell
-                                key={qIdx}
-                                className={cn(
-                                  "text-center",
-                                  quote.isLowest && "bg-green-50 dark:bg-green-950 font-semibold"
-                                )}
-                              >
-                                {quote.price ? `$${quote.price.toLocaleString()}` : '-'}
-                              </TableCell>
+                  <div className="space-y-4">
+                    <div className="text-sm text-muted-foreground">
+                      Comparing {comparison.vendors?.length || 0} vendors across {comparison.items?.length || 0} materials
+                    </div>
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="min-w-[200px]">Material</TableHead>
+                            {comparison.vendors?.map((vendor: string, idx: number) => (
+                              <TableHead key={idx} className="text-center min-w-[120px]">
+                                {vendor}
+                              </TableHead>
                             ))}
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                        </TableHeader>
+                        <TableBody>
+                          {comparison.items?.map((item: any, idx: number) => (
+                            <TableRow key={idx}>
+                              <TableCell className="font-medium">{item.description}</TableCell>
+                              {item.quotes?.map((quotePrice: any, qIdx: number) => (
+                                <TableCell
+                                  key={qIdx}
+                                  className={cn(
+                                    "text-center",
+                                    quotePrice.isLowest && quotePrice.price > 0 && "bg-green-50 dark:bg-green-950 font-semibold text-green-700"
+                                  )}
+                                >
+                                  {quotePrice.price > 0 ? (
+                                    <div>
+                                      <div className="font-semibold">${quotePrice.price.toFixed(2)}</div>
+                                      {quotePrice.total > 0 && (
+                                        <div className="text-xs text-muted-foreground">
+                                          Total: ${quotePrice.total.toLocaleString()}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <span className="text-muted-foreground">-</span>
+                                  )}
+                                </TableCell>
+                              ))}
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
                   </div>
                 )}
               </CardContent>
