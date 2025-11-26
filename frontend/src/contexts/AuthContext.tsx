@@ -36,6 +36,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [token]);
 
+  // Handle API errors and auto-logout on 401
+  useEffect(() => {
+    const interceptor = axios.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        if (error.response?.status === 401) {
+          console.log('Token expired, logging out');
+          logout();
+        }
+        return Promise.reject(error);
+      }
+    );
+
+    return () => {
+      axios.interceptors.response.eject(interceptor);
+    };
+  }, []);
+
   const login = async (email: string, password: string) => {
     try {
       const response = await axios.post(`${API_URL}/auth/login`, {
