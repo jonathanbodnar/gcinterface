@@ -21,10 +21,18 @@ import './App.css';
 const queryClient = new QueryClient();
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   
-  if (!user) {
+  // Check both user and token - token persists in localStorage
+  if (!user && !token) {
     return <Navigate to="/login" />;
+  }
+  
+  // If we have token but no user, the auth context is still loading
+  if (token && !user) {
+    return <div className="flex items-center justify-center h-screen">
+      <div className="text-muted-foreground">Loading...</div>
+    </div>;
   }
   
   return <>{children}</>;
