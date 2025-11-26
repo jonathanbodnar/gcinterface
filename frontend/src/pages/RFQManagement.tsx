@@ -257,19 +257,32 @@ export default function RFQManagement() {
                         {rfq.dueDate ? new Date(rfq.dueDate).toLocaleDateString() : '-'}
                       </TableCell>
                       <TableCell className="text-right">
-                        {rfq.status === 'DRAFT' && (
+                        <div className="flex gap-2">
                           <Button
                             size="sm"
-                            variant="outline"
+                            variant="ghost"
                             onClick={(e) => {
                               e.stopPropagation();
-                              sendRFQ(rfq.id);
+                              window.open(`${API_URL}/rfq/${rfq.id}/pdf`, '_blank');
                             }}
                           >
-                            <Send className="w-4 h-4 mr-2" />
-                            Send
+                            <FileText className="w-4 h-4 mr-2" />
+                            PDF
                           </Button>
-                        )}
+                          {rfq.status === 'DRAFT' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                sendRFQ(rfq.id);
+                              }}
+                            >
+                              <Send className="w-4 h-4 mr-2" />
+                              Send
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
