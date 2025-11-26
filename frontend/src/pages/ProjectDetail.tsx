@@ -246,7 +246,12 @@ export default function ProjectDetail() {
                 Match Vendors
               </Button>
               <Button variant="outline" onClick={() => navigate(`/rfq/${id}`)}>
+                <FileText className="w-4 h-4 mr-2" />
                 Manage RFQs
+              </Button>
+              <Button variant="outline" onClick={() => navigate(`/quotes/${id}`)}>
+                <TrendingUp className="w-4 h-4 mr-2" />
+                Quote Comparison
               </Button>
               <Button variant="outline" onClick={() => window.print()}>
                 Export to PDF

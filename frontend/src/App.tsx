@@ -67,6 +67,11 @@ function App() {
                 <QuoteComparison />
               </ProtectedRoute>
             } />
+            <Route path="/projects/:id/quotes" element={
+              <ProtectedRoute>
+                <QuoteComparison />
+              </ProtectedRoute>
+            } />
             <Route path="/materials" element={
               <ProtectedRoute>
                 <Materials />
