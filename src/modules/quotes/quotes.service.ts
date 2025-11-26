@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import * as xlsx from 'xlsx';
+import * as pdfParse from 'pdf-parse';
 
 @Injectable()
 export class QuotesService {
@@ -94,15 +95,26 @@ export class QuotesService {
     // Parse quote from email body or Excel attachment
     let quoteData = null;
 
-    // Try to parse from Excel attachment
+    // Try to parse from attachments (Excel or PDF)
     if (attachments && attachments.length > 0) {
       for (const attachment of attachments) {
         try {
+          // Try Excel first
           const workbook = xlsx.read(attachment, { type: 'buffer' });
           quoteData = this.parseExcelQuote(workbook);
           if (quoteData) break;
-        } catch (error) {
-          console.log('Failed to parse Excel attachment:', error.message);
+        } catch (excelError) {
+          // Try PDF if Excel fails
+          try {
+            const pdfData = await pdfParse(attachment);
+            quoteData = this.parsePDFQuote(pdfData.text);
+            if (quoteData) {
+              console.log('✅ Parsed quote from PDF');
+              break;
+            }
+          } catch (pdfError) {
+            console.log('Failed to parse attachment as Excel or PDF:', excelError.message);
+          }
         }
       }
     }
@@ -428,4 +440,57 @@ export class QuotesService {
       hasVE: false,
     };
   }
+
+  private parsePDFQuote(pdfText: string): any {
+    // Parse PDF text content (similar to email body parsing but more structured)
+    const lines = pdfText.split('\n').map(l => l.trim()).filter(Boolean);
+    const items = [];
+    let totalAmount = 0;
+
+    // Look for table-like structures in PDF
+    for (const line of lines) {
+      // Pattern: "Item Description    Qty    Unit    Price    Total"
+      // Example: "VCT Flooring 12x12    3840    SF    $3.50    $13,440"
+      
+      const match = line.match(/(.+?)\s+(\d+\.?\d*)\s+(\w+)\s+\$?([\d,]+\.?\d*)\s+\$?([\d,]+\.?\d*)/);
+      
+      if (match) {
+        const [, description, qty, uom, unitPrice, total] = match;
+        items.push({
+          description: description.trim(),
+          quantity: parseFloat(qty),
+          uom: uom,
+          unitPrice: parseFloat(unitPrice.replace(/,/g, '')),
+          totalPrice: parseFloat(total.replace(/,/g, '')),
+        });
+        totalAmount += parseFloat(total.replace(/,/g, ''));
+      } else {
+        // Simpler pattern: "Description: $price"
+        const simpleMatch = line.match(/(.+?):\s*\$?([\d,]+\.?\d*)/);
+        if (simpleMatch) {
+          const price = parseFloat(simpleMatch[2].replace(/,/g, ''));
+          if (price > 10) { // Filter out small numbers that aren't prices
+            items.push({
+              description: simpleMatch[1].trim(),
+              quantity: 1,
+              uom: 'EA',
+              unitPrice: price,
+              totalPrice: price,
+            });
+            totalAmount += price;
+          }
+        }
+      }
+    }
+
+    if (items.length === 0) return null;
+
+    return {
+      quoteNumber: null,
+      items,
+      totalAmount,
+      hasVE: pdfText.toLowerCase().includes('alternative') || pdfText.toLowerCase().includes('substitute'),
+    };
+  }
 }
+
