@@ -1,6 +1,8 @@
-import { Controller, Get, Post, Body, Param, Query, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, UseGuards, Request, Res } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { Response } from 'express';
 import { RFQService } from './rfq.service';
+import { PDFGeneratorService } from './pdf-generator.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('RFQ')
@@ -8,7 +10,10 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class RFQController {
-  constructor(private rfqService: RFQService) {}
+  constructor(
+    private rfqService: RFQService,
+    private pdfGenerator: PDFGeneratorService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'List RFQs for a project' })
@@ -35,5 +40,15 @@ export class RFQController {
   @ApiOperation({ summary: 'Send RFQ via email' })
   async sendRFQ(@Param('id') id: string) {
     return this.rfqService.sendRFQ(id);
+  }
+
+  @Get(':id/pdf')
+  @ApiOperation({ summary: 'Generate RFQ PDF' })
+  async generatePDF(@Param('id') id: string, @Res() res: Response) {
+    const pdfBuffer = await this.pdfGenerator.generateRFQPDF(id);
+    
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=RFQ-${id}.pdf`);
+    res.send(pdfBuffer);
   }
 }
