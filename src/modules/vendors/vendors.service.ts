@@ -115,7 +115,36 @@ export class VendorsService {
   }
 
   async createVendor(data: any) {
-    return this.prisma.vendor.create({ data });
+    // Extract material IDs if provided
+    const materialIds = data.materialIds || [];
+    delete data.materialIds; // Remove from vendor data
+    
+    // Create the vendor
+    const vendor = await this.prisma.vendor.create({ data });
+    
+    // Create VendorMaterialPricing entries for each material
+    if (materialIds.length > 0) {
+      console.log(`Creating ${materialIds.length} material pricing entries for vendor ${vendor.id}`);
+      
+      for (const materialId of materialIds) {
+        try {
+          await this.prisma.vendorMaterialPricing.create({
+            data: {
+              vendorId: vendor.id,
+              materialId: materialId,
+              unitCost: 0, // Placeholder - user can update later
+              active: true,
+            },
+          });
+        } catch (error) {
+          console.error(`Failed to create pricing for material ${materialId}:`, error.message);
+        }
+      }
+      
+      console.log(`✅ Created vendor ${vendor.name} with ${materialIds.length} materials`);
+    }
+    
+    return vendor;
   }
 
   async listVendors(filters?: { trade?: string; proximity?: string }) {
@@ -155,10 +184,49 @@ export class VendorsService {
   }
 
   async updateVendor(id: string, data: any) {
-    return this.prisma.vendor.update({
+    // Extract material IDs if provided
+    const materialIds = data.materialIds || [];
+    delete data.materialIds; // Remove from vendor data
+    
+    // Update the vendor
+    const vendor = await this.prisma.vendor.update({
       where: { id },
       data,
     });
+    
+    // If materialIds provided, sync VendorMaterialPricing entries
+    if (materialIds.length > 0) {
+      console.log(`Syncing ${materialIds.length} materials for vendor ${vendor.id}`);
+      
+      // Get existing pricing entries
+      const existing = await this.prisma.vendorMaterialPricing.findMany({
+        where: { vendorId: id },
+        select: { materialId: true },
+      });
+      const existingMaterialIds = new Set(existing.map(e => e.materialId));
+      
+      // Add new materials
+      for (const materialId of materialIds) {
+        if (!existingMaterialIds.has(materialId)) {
+          try {
+            await this.prisma.vendorMaterialPricing.create({
+              data: {
+                vendorId: id,
+                materialId: materialId,
+                unitCost: 0, // Placeholder
+                active: true,
+              },
+            });
+          } catch (error) {
+            console.error(`Failed to create pricing for material ${materialId}:`, error.message);
+          }
+        }
+      }
+      
+      console.log(`✅ Updated vendor ${vendor.name} materials`);
+    }
+    
+    return vendor;
   }
 
   async uploadMaterialCatalog(vendorId: string, file: Express.Multer.File) {

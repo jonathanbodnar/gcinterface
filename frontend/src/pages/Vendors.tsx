@@ -205,7 +205,8 @@ export default function Vendors() {
       };
 
       const supplierData = (vendorType === 'MATERIAL_SUPPLIER' || vendorType === 'BOTH') ? {
-        materials: materialNames,
+        materials: materialNames, // Keep for backward compatibility
+        materialIds: selectedMaterialIds, // NEW: Send IDs for VendorMaterialPricing
         alternates: vendorForm.alternates.split(',').map(a => a.trim()).filter(Boolean),
         isRequired: vendorForm.isRequired,
         requiredFor: vendorForm.requiredFor.split(',').map(r => r.trim()).filter(Boolean),
