@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Query, UseGuards, Request, Res } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Body, Param, Query, UseGuards, Request, Res } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Response } from 'express';
 import { RFQService } from './rfq.service';
@@ -50,5 +50,11 @@ export class RFQController {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename=RFQ-${id}.pdf`);
     res.send(pdfBuffer);
+  }
+
+  @Delete('clear-all')
+  @ApiOperation({ summary: 'Clear all RFQs (for testing)' })
+  async clearAllRFQs() {
+    return this.rfqService.clearAllRFQs();
   }
 }

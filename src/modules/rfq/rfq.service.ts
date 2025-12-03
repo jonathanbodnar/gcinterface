@@ -386,4 +386,23 @@ export class RFQService {
       </html>
     `;
   }
+
+  async clearAllRFQs() {
+    this.logger.log('🗑️  Clearing all RFQs...');
+    
+    // Delete RFQ items first (foreign key constraint)
+    const deletedItems = await this.prisma.rFQItem.deleteMany({});
+    this.logger.log(`✅ Deleted ${deletedItems.count} RFQ items`);
+    
+    // Delete RFQs
+    const deletedRFQs = await this.prisma.rFQ.deleteMany({});
+    this.logger.log(`✅ Deleted ${deletedRFQs.count} RFQs`);
+    
+    return {
+      success: true,
+      message: `Cleared ${deletedRFQs.count} RFQs and ${deletedItems.count} items`,
+      deletedRFQs: deletedRFQs.count,
+      deletedItems: deletedItems.count,
+    };
+  }
 }
