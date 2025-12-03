@@ -32,9 +32,7 @@ export default function PlanViewerPage() {
   const [highlights, setHighlights] = useState<any[]>([]);
   const [activeTool, setActiveTool] = useState<Tool>('none');
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
-
-  // Mock PDF URL - in production, this would come from the project
-  const pdfUrl = 'https://mozilla.github.io/pdf.js/web/compressed.tracemonkey-pldi-09.pdf';
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
 
   // Trade colors for highlighting
   const tradeColors: Record<string, string> = {

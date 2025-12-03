@@ -17,7 +17,7 @@ export class ProjectsService {
     }
 
     const takeoffJob = await this.takeoffPrisma.$queryRaw`
-      SELECT j.*, f.filename
+      SELECT j.*, f.filename, f.url, f.path, f."storageUrl"
       FROM "jobs" j
       LEFT JOIN "files" f ON j."fileId" = f.id
       WHERE j.id = ${takeoffJobId}
@@ -53,6 +53,27 @@ export class ProjectsService {
         totalSF: totalSF,
       },
     });
+
+    // Create PlanPage record with PDF from takeoff
+    const pdfUrl = (jobData as any).storageUrl || (jobData as any).url || (jobData as any).path;
+    if (pdfUrl) {
+      try {
+        await this.prisma.planPage.create({
+          data: {
+            projectId: project.id,
+            pageNumber: 1,
+            fileName: jobData.filename || 'plan.pdf',
+            pdfUrl: pdfUrl,
+            materialsOnPage: [],
+          },
+        });
+        console.log(`📄 Created PlanPage with PDF: ${pdfUrl}`);
+      } catch (error) {
+        console.warn('⚠️ Could not create PlanPage:', error.message);
+      }
+    } else {
+      console.warn('⚠️ No PDF URL found in takeoff files table');
+    }
 
     console.log(`✅ Imported takeoff job ${takeoffJobId} as project ${project.id}`);
     console.log(`📐 Total SF: ${totalSF}`);

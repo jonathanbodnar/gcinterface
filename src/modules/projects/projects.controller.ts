@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Body, Param, UseGuards, Request } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { ProjectsService } from './projects.service';
+import { PrismaService } from '@/common/prisma/prisma.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('Projects')
@@ -8,7 +9,10 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class ProjectsController {
-  constructor(private projectsService: ProjectsService) {}
+  constructor(
+    private projectsService: ProjectsService,
+    private prisma: PrismaService,
+  ) {}
 
   @Post('import/:takeoffJobId')
   @ApiOperation({ summary: 'Import project from takeoff database' })
@@ -31,7 +35,24 @@ export class ProjectsController {
   @Get(':id')
   @ApiOperation({ summary: 'Get project details' })
   async getProject(@Param('id') id: string) {
-    return this.projectsService.getTakeoffData(id);
+    const data = await this.projectsService.getTakeoffData(id);
+    
+    // Include PDF URL from PlanPage if available
+    const planPages = await this.prisma.planPage.findMany({
+      where: { projectId: id },
+      orderBy: { pageNumber: 'asc' },
+      select: {
+        id: true,
+        pageNumber: true,
+        fileName: true,
+        pdfUrl: true,
+      },
+    });
+    
+    return {
+      ...data,
+      planPages,
+    };
   }
 
   @Post(':id/selected-vendors')
