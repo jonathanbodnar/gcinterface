@@ -1,6 +1,7 @@
-import { Controller, Post, Body, Headers, UnauthorizedException } from '@nestjs/common';
+import { Controller, Post, Body, Headers, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiExcludeEndpoint } from '@nestjs/swagger';
 import { QuotesService } from '../quotes/quotes.service';
+import { Request } from 'express';
 
 interface SendGridAttachment {
   content: string; // base64
@@ -37,23 +38,22 @@ export class WebhooksController {
   @ApiExcludeEndpoint() // Don't show in Swagger (webhook endpoint)
   @ApiOperation({ summary: 'Receive inbound emails from SendGrid' })
   async handleSendGridInbound(
-    @Body() payload: any,
+    @Req() req: Request,
     @Headers() headers: any,
   ) {
+    // Access body directly from Express request
+    const payload: SendGridInbound = req.body;
+    
     console.log('📧 ==========================================');
     console.log('📧 INBOUND EMAIL RECEIVED FROM SENDGRID');
     console.log('📧 ==========================================');
-    console.log('  Raw payload type:', typeof payload);
-    console.log('  Raw payload:', JSON.stringify(payload, null, 2).substring(0, 500));
+    console.log('  Raw req.body type:', typeof req.body);
+    console.log('  Raw req.body keys:', req.body ? Object.keys(req.body) : 'NULL');
+    console.log('  Content-Type:', headers['content-type']);
     console.log(`  From: ${payload?.from}`);
     console.log(`  To: ${payload?.to}`);
     console.log(`  Subject: ${payload?.subject}`);
     console.log(`  Attachments: ${payload?.attachments || '0'}`);
-    console.log(`  Full payload keys:`, payload ? Object.keys(payload) : 'PAYLOAD IS NULL/UNDEFINED');
-    
-    // Debug headers to see content-type
-    console.log('  Content-Type:', headers['content-type']);
-    console.log('  All headers:', Object.keys(headers));
 
     // Optional: Verify SendGrid signature for security
     if (process.env.SENDGRID_WEBHOOK_SECRET) {
