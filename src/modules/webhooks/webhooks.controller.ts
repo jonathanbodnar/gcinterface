@@ -37,20 +37,23 @@ export class WebhooksController {
   @ApiExcludeEndpoint() // Don't show in Swagger (webhook endpoint)
   @ApiOperation({ summary: 'Receive inbound emails from SendGrid' })
   async handleSendGridInbound(
-    @Body() rawBody: any,
+    @Body() payload: any,
     @Headers() headers: any,
   ) {
-    // SendGrid sends data as application/x-www-form-urlencoded or multipart/form-data
-    // NestJS automatically parses it into req.body, but we need to handle it properly
-    const payload: SendGridInbound = rawBody;
     console.log('📧 ==========================================');
     console.log('📧 INBOUND EMAIL RECEIVED FROM SENDGRID');
     console.log('📧 ==========================================');
-    console.log(`  From: ${payload.from}`);
-    console.log(`  To: ${payload.to}`);
-    console.log(`  Subject: ${payload.subject}`);
-    console.log(`  Attachments: ${payload.attachments || '0'}`);
-    console.log(`  Full payload keys:`, Object.keys(payload));
+    console.log('  Raw payload type:', typeof payload);
+    console.log('  Raw payload:', JSON.stringify(payload, null, 2).substring(0, 500));
+    console.log(`  From: ${payload?.from}`);
+    console.log(`  To: ${payload?.to}`);
+    console.log(`  Subject: ${payload?.subject}`);
+    console.log(`  Attachments: ${payload?.attachments || '0'}`);
+    console.log(`  Full payload keys:`, payload ? Object.keys(payload) : 'PAYLOAD IS NULL/UNDEFINED');
+    
+    // Debug headers to see content-type
+    console.log('  Content-Type:', headers['content-type']);
+    console.log('  All headers:', Object.keys(headers));
 
     // Optional: Verify SendGrid signature for security
     if (process.env.SENDGRID_WEBHOOK_SECRET) {
