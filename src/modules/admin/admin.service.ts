@@ -23,11 +23,20 @@ export class AdminService {
   }
 
   // Trade Markups
-  async setTradeMarkup(trade: string, markup: number) {
+  async setTradeMarkup(trade: string, markup: number, clientId?: string) {
+    // Use compound unique key (clientId, trade) 
+    const whereClause = clientId 
+      ? { clientId_trade: { clientId, trade } }
+      : { clientId_trade: { clientId: null, trade } };
+    
     return this.prisma.tradeMarkup.upsert({
-      where: { trade },
+      where: whereClause as any,
       update: { markup },
-      create: { trade, markup },
+      create: { 
+        trade, 
+        markup,
+        clientId: clientId || null,
+      },
     });
   }
 
