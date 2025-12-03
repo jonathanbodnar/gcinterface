@@ -7,6 +7,8 @@ export interface TakeoffJob {
   createdAt: string;
   status: string;
   fileId?: string;
+  disciplines?: string[];
+  targets?: string[];
 }
 
 export interface TakeoffFeature {
