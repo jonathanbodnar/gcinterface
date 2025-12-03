@@ -37,9 +37,12 @@ export class WebhooksController {
   @ApiExcludeEndpoint() // Don't show in Swagger (webhook endpoint)
   @ApiOperation({ summary: 'Receive inbound emails from SendGrid' })
   async handleSendGridInbound(
-    @Body() payload: SendGridInbound,
+    @Body() rawBody: any,
     @Headers() headers: any,
   ) {
+    // SendGrid sends data as application/x-www-form-urlencoded or multipart/form-data
+    // NestJS automatically parses it into req.body, but we need to handle it properly
+    const payload: SendGridInbound = rawBody;
     console.log('📧 ==========================================');
     console.log('📧 INBOUND EMAIL RECEIVED FROM SENDGRID');
     console.log('📧 ==========================================');
