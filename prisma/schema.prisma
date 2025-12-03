@@ -168,6 +168,7 @@ model Material {
   bomItems      BOM[]
   vendorPricing VendorMaterialPricing[]
   markups       MaterialMarkup[]
+  laborPricing  VendorLaborPricing[]
 
   @@unique([name, trade]) // Prevent duplicates by name+trade
   @@map("materials")
@@ -336,11 +337,13 @@ model Vendor {
   requiredFor String[] // Specific materials they're required for
 
   // CONTRACTOR-SPECIFIC FIELDS
-  services       String[] // Services: Drywall, Taping, Paint, Tile
-  crewSize       Int? // Number of crew members
-  equipmentList  String[] // Equipment they own
-  certifications String[] // OSHA, licenses, EPA, etc.
-  insurance      Json? // {liability, workers_comp, expiry}
+  services             String[] // Services: Drywall, Taping, Paint, Tile
+  crewSize             Int? // Number of crew members
+  equipmentList        String[] // Equipment they own
+  certifications       String[] // OSHA, licenses, EPA, etc.
+  insurance            Json? // {liability, workers_comp, expiry}
+  laborRate            Float? // Base hourly rate for labor ($/hour)
+  materialCapabilities String[] // Materials they can install (for matching)
 
   // Performance
   rating       Float? @default(0)
@@ -369,8 +372,47 @@ model Vendor {
   quotes          Quote[]
   subcontracts    Subcontract[]
   materialPricing VendorMaterialPricing[]
+  laborPricing    VendorLaborPricing[]
 
   @@map("vendors")
+}
+
+// Vendor-Specific Labor Pricing (for subcontractors)
+model VendorLaborPricing {
+  id         String  @id @default(cuid())
+  vendorId   String
+  materialId String? // Null = applies to whole trade
+  trade      String // M, E, P, A
+
+  // Pricing
+  laborRate     Float // $ per hour
+  hoursPerUnit  Float? // Hours per SF, LF, EA, etc.
+  uom           String? // Unit this applies to
+  minimumCharge Float? // Minimum job charge
+
+  // Terms
+  mobilizationCost Float? // Cost to mobilize crew
+  leadTimeDays     Int? // How soon they can start
+
+  // Validity
+  effectiveDate DateTime  @default(now())
+  expiryDate    DateTime?
+  lastQuoteDate DateTime?
+
+  // Source
+  quotedBy      String? // User who entered
+  sourceQuoteId String?
+
+  active Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  vendor   Vendor    @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  material Material? @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  @@unique([vendorId, materialId, trade])
+  @@map("vendor_labor_pricing")
 }
 
 enum VendorType {
@@ -568,8 +610,13 @@ model MaterialRule {
   trade        String // M, E, P, A
   material     String
   costPerUnit  Float
-  laborPerUnit Float?
+  laborPerUnit Float? // Hours per unit (e.g., 0.015 hours per SF)
+  laborRate    Float? // $ per hour for this material type
   uom          String
+
+  // For subcontractor matching
+  crewSize            Int? // Typical crew size needed
+  equipmentCostPerDay Float? // Equipment/tools cost
 
   active Boolean @default(true)
 

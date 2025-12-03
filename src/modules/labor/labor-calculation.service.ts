@@ -140,24 +140,75 @@ export class LaborCalculationService {
     }
   }
 
-  private async getLaborRule(bomItem: any): Promise<{ hoursPerUnit: number; rate: number } | null> {
-    // Try to find a matching material rule
-    const rule = await this.prisma.materialRule.findFirst({
+  private async getLaborRule(bomItem: any): Promise<{ hoursPerUnit: number; rate: number; crewSize?: number; equipmentCost?: number } | null> {
+    // Try exact match first
+    let rule = await this.prisma.materialRule.findFirst({
       where: {
         material: bomItem.description,
         active: true,
       },
     });
 
+    // If no exact match, try fuzzy matching
+    if (!rule) {
+      const allRules = await this.prisma.materialRule.findMany({
+        where: { active: true },
+      });
+      
+      // Find best match by similarity
+      const matches = allRules.map(r => ({
+        rule: r,
+        score: this.calculateSimilarity(bomItem.description, r.material),
+      }));
+      
+      matches.sort((a, b) => b.score - a.score);
+      if (matches[0]?.score > 0.7) {
+        rule = matches[0].rule;
+        console.log(`🔧 Labor rule fuzzy match: "${bomItem.description}" → "${rule.material}" (${(matches[0].score * 100).toFixed(0)}%)`);
+      }
+    }
+
     if (rule && rule.laborPerUnit) {
+      const ruleData = rule as any; // Cast until schema migration
       return {
         hoursPerUnit: rule.laborPerUnit,
-        rate: 50.00, // Default labor rate (could be configurable)
+        rate: ruleData.laborRate || 50.00, // Use rule's rate or default
+        crewSize: ruleData.crewSize || undefined,
+        equipmentCost: ruleData.equipmentCostPerDay || undefined,
       };
     }
 
     // Fallback to category-based estimates
     return this.getDefaultLaborRate(bomItem.category, bomItem.uom);
+  }
+
+  /**
+   * Calculate similarity between two strings for fuzzy matching
+   */
+  private calculateSimilarity(str1: string, str2: string): number {
+    const s1 = str1.toLowerCase().trim();
+    const s2 = str2.toLowerCase().trim();
+
+    if (s1 === s2) return 1.0;
+
+    const normalize = (s: string) => s.replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
+    const n1 = normalize(s1);
+    const n2 = normalize(s2);
+
+    if (n1 === n2) return 0.95;
+
+    const words1 = n1.split(' ').filter(w => w.length > 2);
+    const words2 = n2.split(' ').filter(w => w.length > 2);
+    
+    if (words1.length === 0 || words2.length === 0) return 0;
+    
+    const commonWords = words1.filter(w => words2.includes(w));
+    const totalWords = Math.max(words1.length, words2.length);
+    
+    const wordMatchScore = commonWords.length / totalWords;
+    const substringBonus = (s1.includes(s2) || s2.includes(s1)) ? 0.1 : 0;
+
+    return Math.min(wordMatchScore + substringBonus, 1.0);
   }
 
   private getDefaultLaborRate(category: string, uom: string): { hoursPerUnit: number; rate: number } {

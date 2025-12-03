@@ -3,6 +3,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { VendorsService } from './vendors.service';
 import { VendorRankingService } from './vendor-ranking.service';
+import { SubcontractorRankingService } from './subcontractor-ranking.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('Vendors')
@@ -13,6 +14,7 @@ export class VendorsController {
   constructor(
     private vendorsService: VendorsService,
     private vendorRanking: VendorRankingService,
+    private subcontractorRanking: SubcontractorRankingService,
   ) {}
 
   @Get('match/:projectId')
@@ -27,6 +29,27 @@ export class VendorsController {
     return this.vendorRanking.getVendorPriceComparison(projectId);
   }
 
+  @Get('rank-subcontractors/:projectId')
+  @ApiOperation({ summary: 'Rank subcontractors by labor capabilities for project' })
+  async rankSubcontractors(@Param('projectId') projectId: string) {
+    const rankings = await this.subcontractorRanking.rankSubcontractorsByProject(projectId);
+    return {
+      hasData: rankings.length > 0,
+      rankings: rankings.map(r => ({
+        vendorId: r.vendor.id,
+        vendorName: r.vendor.name,
+        estimatedLaborCost: r.estimatedLaborCost,
+        materialCoverage: r.materialCoverage,
+        competitiveScore: r.competitiveScore,
+        avgRateVsMarket: r.avgRateVsMarket,
+        materialsWithPricing: r.materialsWithPricing,
+        totalMaterials: r.totalMaterials,
+        crewSize: r.vendor.crewSize,
+        laborRate: r.vendor.laborRate,
+      })),
+    };
+  }
+
   @Get(':vendorId/coverage/:projectId')
   @ApiOperation({ summary: 'Get detailed material coverage for vendor on project' })
   async getVendorCoverage(
@@ -34,6 +57,15 @@ export class VendorsController {
     @Param('projectId') projectId: string,
   ) {
     return this.vendorRanking.getVendorMaterialCoverage(vendorId, projectId);
+  }
+
+  @Get(':vendorId/labor-coverage/:projectId')
+  @ApiOperation({ summary: 'Get detailed labor coverage for subcontractor on project' })
+  async getSubcontractorCoverage(
+    @Param('vendorId') vendorId: string,
+    @Param('projectId') projectId: string,
+  ) {
+    return this.subcontractorRanking.getSubcontractorMaterialCoverage(vendorId, projectId);
   }
 
   @Get()

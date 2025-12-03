@@ -128,7 +128,7 @@ export class VendorsService {
       
       for (const materialId of materialIds) {
         try {
-          await this.prisma.vendorMaterialPricing.create({
+          await (this.prisma as any).vendorMaterialPricing.create({
             data: {
               vendorId: vendor.id,
               materialId: materialId,
@@ -199,7 +199,7 @@ export class VendorsService {
       console.log(`Syncing ${materialIds.length} materials for vendor ${vendor.id}`);
       
       // Get existing pricing entries
-      const existing = await this.prisma.vendorMaterialPricing.findMany({
+      const existing = await (this.prisma as any).vendorMaterialPricing.findMany({
         where: { vendorId: id },
         select: { materialId: true },
       });
@@ -209,7 +209,7 @@ export class VendorsService {
       for (const materialId of materialIds) {
         if (!existingMaterialIds.has(materialId)) {
           try {
-            await this.prisma.vendorMaterialPricing.create({
+            await (this.prisma as any).vendorMaterialPricing.create({
               data: {
                 vendorId: id,
                 materialId: materialId,
