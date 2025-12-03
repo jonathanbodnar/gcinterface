@@ -253,77 +253,27 @@ export class RFQService {
       bodyContent = bodyContent.replace(new RegExp(key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), value);
     });
 
-    // Wrap in proper HTML email structure with CSS
+    // Convert TipTap HTML to email-friendly HTML with inline styles
+    // Replace <p> tags with inline styles for spacing
+    bodyContent = bodyContent.replace(/<p>/g, '<p style="margin: 16px 0; line-height: 1.6;">');
+    bodyContent = bodyContent.replace(/<h1>/g, '<h1 style="margin: 24px 0 8px 0; font-size: 32px; font-weight: 600;">');
+    bodyContent = bodyContent.replace(/<h2>/g, '<h2 style="margin: 24px 0 8px 0; font-size: 24px; font-weight: 600;">');
+    bodyContent = bodyContent.replace(/<h3>/g, '<h3 style="margin: 20px 0 8px 0; font-size: 18px; font-weight: 600;">');
+    bodyContent = bodyContent.replace(/<ul>/g, '<ul style="margin: 16px 0; padding-left: 32px;">');
+    bodyContent = bodyContent.replace(/<ol>/g, '<ol style="margin: 16px 0; padding-left: 32px;">');
+    bodyContent = bodyContent.replace(/<li>/g, '<li style="margin: 8px 0;">');
+    bodyContent = bodyContent.replace(/<br>/g, '<br style="line-height: 1.6;">');
+    
+    // Wrap in email-safe HTML structure
     const html = `
       <!DOCTYPE html>
       <html>
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <style>
-          body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: #f9fafb;
-          }
-          .email-content {
-            background-color: #ffffff;
-            padding: 30px;
-            border-radius: 8px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-          }
-          p {
-            margin: 1em 0;
-          }
-          h1, h2, h3, h4, h5, h6 {
-            margin-top: 1.5em;
-            margin-bottom: 0.5em;
-            font-weight: 600;
-          }
-          h1 { font-size: 2em; }
-          h2 { font-size: 1.5em; }
-          h3 { font-size: 1.17em; }
-          ul, ol {
-            margin: 1em 0;
-            padding-left: 2em;
-          }
-          li {
-            margin: 0.5em 0;
-          }
-          table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 1.5em 0;
-          }
-          th, td {
-            border: 1px solid #e5e7eb;
-            padding: 12px;
-            text-align: left;
-          }
-          th {
-            background-color: #f3f4f6;
-            font-weight: 600;
-          }
-          tr:nth-child(even) {
-            background-color: #f9fafb;
-          }
-          strong {
-            font-weight: 600;
-          }
-          em {
-            font-style: italic;
-          }
-          u {
-            text-decoration: underline;
-          }
-        </style>
       </head>
-      <body>
-        <div class="email-content">
+      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; background-color: #f9fafb;">
+        <div style="background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
           ${bodyContent}
         </div>
       </body>

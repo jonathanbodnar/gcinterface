@@ -40,10 +40,14 @@ export class WebhooksController {
     @Body() payload: SendGridInbound,
     @Headers() headers: any,
   ) {
-    console.log('📧 Inbound email received from SendGrid');
+    console.log('📧 ==========================================');
+    console.log('📧 INBOUND EMAIL RECEIVED FROM SENDGRID');
+    console.log('📧 ==========================================');
     console.log(`  From: ${payload.from}`);
     console.log(`  To: ${payload.to}`);
     console.log(`  Subject: ${payload.subject}`);
+    console.log(`  Attachments: ${payload.attachments || '0'}`);
+    console.log(`  Full payload keys:`, Object.keys(payload));
 
     // Optional: Verify SendGrid signature for security
     if (process.env.SENDGRID_WEBHOOK_SECRET) {
@@ -59,22 +63,32 @@ export class WebhooksController {
     }
 
     try {
-      // Extract RFQ ID from recipient email
-      // Format: rfq-{rfqId}@quotes.gclegacy.com
-      const rfqMatch = payload.to.match(/rfq-(.+?)@/);
+      // Extract RFQ ID from subject line first (more reliable)
+      // Format: "Re: Request for Quote - ProjectName - RFQ #RFQ-176479"
+      let rfqId: string | null = null;
       
-      if (!rfqMatch) {
-        console.log('⚠️ No RFQ ID found in recipient address');
-        // Try extracting from subject line
-        const subjectMatch = payload.subject.match(/RFQ #?(\S+)/i);
-        if (subjectMatch) {
-          return await this.processQuote(subjectMatch[1], payload);
-        }
-        return { error: 'Could not identify RFQ' };
+      // Try subject line first
+      const subjectMatch = payload.subject.match(/RFQ[- ]#?([A-Z0-9-]+)/i);
+      if (subjectMatch) {
+        rfqId = subjectMatch[1];
+        console.log(`📋 RFQ ID from subject: ${rfqId}`);
       }
-
-      const rfqId = rfqMatch[1];
-      console.log(`📋 RFQ ID: ${rfqId}`);
+      
+      // Fallback to recipient email
+      if (!rfqId) {
+        const rfqMatch = payload.to.match(/rfq-(.+?)@/);
+        if (rfqMatch) {
+          rfqId = rfqMatch[1];
+          console.log(`📋 RFQ ID from recipient: ${rfqId}`);
+        }
+      }
+      
+      if (!rfqId) {
+        console.log('⚠️ Could not identify RFQ from subject or recipient');
+        console.log(`  Subject: ${payload.subject}`);
+        console.log(`  To: ${payload.to}`);
+        return { error: 'Could not identify RFQ. Please include RFQ number in subject.' };
+      }
 
       return await this.processQuote(rfqId, payload);
     } catch (error) {
