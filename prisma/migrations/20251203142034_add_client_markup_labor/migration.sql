@@ -35,6 +35,43 @@ CREATE TABLE IF NOT EXISTS "material_markups" (
 );
 
 -- CreateTable
+CREATE TABLE IF NOT EXISTS "plan_pages" (
+    "id" TEXT NOT NULL,
+    "projectId" TEXT NOT NULL,
+    "pageNumber" INTEGER NOT NULL,
+    "fileName" TEXT NOT NULL,
+    "pdfUrl" TEXT NOT NULL,
+    "thumbnail" TEXT,
+    "sheetName" TEXT,
+    "scale" TEXT,
+    "discipline" TEXT,
+    "materialsOnPage" JSONB[],
+    "featuresOnPage" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "plan_pages_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE IF NOT EXISTS "feature_locations" (
+    "id" TEXT NOT NULL,
+    "projectId" TEXT NOT NULL,
+    "planPageId" TEXT NOT NULL,
+    "featureId" TEXT NOT NULL,
+    "coordinates" JSONB NOT NULL,
+    "geometryType" TEXT NOT NULL,
+    "materialId" TEXT,
+    "bomItemId" TEXT,
+    "color" TEXT,
+    "label" TEXT,
+    "trade" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "feature_locations_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE IF NOT EXISTS "vendor_labor_pricing" (
     "id" TEXT NOT NULL,
     "vendorId" TEXT NOT NULL,
@@ -77,6 +114,9 @@ ALTER TABLE "trade_markups" DROP CONSTRAINT IF EXISTS "trade_markups_trade_key";
 CREATE UNIQUE INDEX IF NOT EXISTS "material_markups_clientId_materialId_key" ON "material_markups"("clientId", "materialId");
 CREATE UNIQUE INDEX IF NOT EXISTS "trade_markups_clientId_trade_key" ON "trade_markups"("clientId", "trade");
 CREATE UNIQUE INDEX IF NOT EXISTS "vendor_labor_pricing_vendorId_materialId_trade_key" ON "vendor_labor_pricing"("vendorId", "materialId", "trade");
+CREATE UNIQUE INDEX IF NOT EXISTS "plan_pages_projectId_pageNumber_key" ON "plan_pages"("projectId", "pageNumber");
+CREATE INDEX IF NOT EXISTS "feature_locations_projectId_planPageId_idx" ON "feature_locations"("projectId", "planPageId");
+CREATE INDEX IF NOT EXISTS "feature_locations_materialId_idx" ON "feature_locations"("materialId");
 
 -- AddForeignKey
 ALTER TABLE "material_markups" ADD CONSTRAINT "material_markups_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "clients"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -85,3 +125,5 @@ ALTER TABLE "trade_markups" ADD CONSTRAINT "trade_markups_clientId_fkey" FOREIGN
 ALTER TABLE "projects" ADD CONSTRAINT "projects_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "clients"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 ALTER TABLE "vendor_labor_pricing" ADD CONSTRAINT "vendor_labor_pricing_vendorId_fkey" FOREIGN KEY ("vendorId") REFERENCES "vendors"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "vendor_labor_pricing" ADD CONSTRAINT "vendor_labor_pricing_materialId_fkey" FOREIGN KEY ("materialId") REFERENCES "materials"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "plan_pages" ADD CONSTRAINT "plan_pages_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "projects"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "feature_locations" ADD CONSTRAINT "feature_locations_planPageId_fkey" FOREIGN KEY ("planPageId") REFERENCES "plan_pages"("id") ON DELETE CASCADE ON UPDATE CASCADE;
