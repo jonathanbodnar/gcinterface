@@ -27,6 +27,15 @@ export class VendorsController {
     return this.vendorRanking.getVendorPriceComparison(projectId);
   }
 
+  @Get(':vendorId/coverage/:projectId')
+  @ApiOperation({ summary: 'Get detailed material coverage for vendor on project' })
+  async getVendorCoverage(
+    @Param('vendorId') vendorId: string,
+    @Param('projectId') projectId: string,
+  ) {
+    return this.vendorRanking.getVendorMaterialCoverage(vendorId, projectId);
+  }
+
   @Get()
   @ApiOperation({ summary: 'List vendors' })
   async listVendors(@Query('trade') trade?: string, @Query('proximity') proximity?: string) {

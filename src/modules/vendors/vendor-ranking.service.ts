@@ -28,8 +28,8 @@ export class VendorRankingService {
       return [];
     }
 
-    // Get all active vendors
-    const vendors = await this.prisma.vendor.findMany({
+    // Get all active vendors with their material pricing
+    const vendors = await (this.prisma as any).vendor.findMany({
       where: { active: true },
       include: {
         materialPricing: {
@@ -73,7 +73,7 @@ export class VendorRankingService {
           materialsWithPricing++;
 
           // Get market average for comparison
-          const allPrices = await this.prisma.vendorMaterialPricing.findMany({
+          const allPrices = await (this.prisma as any).vendorMaterialPricing.findMany({
             where: {
               materialId: vendorPrice.materialId,
               active: true,
@@ -161,6 +161,84 @@ export class VendorRankingService {
 
   async rankVendorsByProject(projectId: string) {
     return this.rankVendorsByPrice(projectId);
+  }
+
+  /**
+   * Get detailed material coverage for a specific vendor on a project
+   * Returns which materials the vendor can supply (with fuzzy matching)
+   */
+  async getVendorMaterialCoverage(vendorId: string, projectId: string) {
+    // Get BOM items for project
+    const bomItems = await this.prisma.bOM.findMany({
+      where: { projectId },
+      include: {
+        material: true,
+      },
+    });
+
+    if (bomItems.length === 0) {
+      return { covered: [], uncovered: [], coverage: 0 };
+    }
+
+    // Get vendor's pricing
+    const vendor = await (this.prisma as any).vendor.findUnique({
+      where: { id: vendorId },
+      include: {
+        materialPricing: {
+          where: { active: true },
+          include: {
+            material: true,
+          },
+        },
+      },
+    });
+
+    if (!vendor) {
+      throw new Error('Vendor not found');
+    }
+
+    const covered = [];
+    const uncovered = [];
+
+    for (const bomItem of bomItems) {
+      // Try exact ID match first
+      let vendorPrice = bomItem.materialId 
+        ? vendor.materialPricing.find(p => p.materialId === bomItem.materialId)
+        : null;
+
+      // If no exact match, try fuzzy name matching
+      if (!vendorPrice && bomItem.description) {
+        vendorPrice = vendor.materialPricing.find(p => {
+          if (!p.material?.name) return false;
+          const similarity = this.calculateSimilarity(bomItem.description, p.material.name);
+          return similarity > 0.7; // 70% threshold
+        });
+      }
+
+      if (vendorPrice) {
+        covered.push({
+          bomItemId: bomItem.id,
+          description: bomItem.description,
+          vendorMaterialName: vendorPrice.material?.name,
+          unitCost: vendorPrice.unitCost,
+          matchType: bomItem.materialId === vendorPrice.materialId ? 'exact' : 'fuzzy',
+        });
+      } else {
+        uncovered.push({
+          bomItemId: bomItem.id,
+          description: bomItem.description,
+        });
+      }
+    }
+
+    return {
+      vendorId,
+      vendorName: vendor.name,
+      covered,
+      uncovered,
+      coverage: (covered.length / bomItems.length) * 100,
+      totalMaterials: bomItems.length,
+    };
   }
 
   /**

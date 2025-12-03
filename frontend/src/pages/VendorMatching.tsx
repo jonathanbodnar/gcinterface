@@ -30,6 +30,7 @@ export default function VendorMatching() {
   const [materialsNeeded, setMaterialsNeeded] = useState<any>({});
   const [vendors, setVendors] = useState<any[]>([]);
   const [selectedVendors, setSelectedVendors] = useState<Set<string>>(new Set());
+  const [vendorCoverage, setVendorCoverage] = useState<Map<string, any>>(new Map());
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -93,12 +94,24 @@ export default function VendorMatching() {
     }
   };
 
-  const toggleVendor = (vendorId: string) => {
+  const toggleVendor = async (vendorId: string) => {
     const newSelected = new Set(selectedVendors);
     if (newSelected.has(vendorId)) {
       newSelected.delete(vendorId);
     } else {
       newSelected.add(vendorId);
+      
+      // Load detailed coverage for this vendor if not already loaded
+      if (!vendorCoverage.has(vendorId)) {
+        try {
+          const response = await axios.get(`${API_URL}/vendors/${vendorId}/coverage/${projectId}`);
+          const newCoverage = new Map(vendorCoverage);
+          newCoverage.set(vendorId, response.data);
+          setVendorCoverage(newCoverage);
+        } catch (error) {
+          console.error('Failed to load vendor coverage:', error);
+        }
+      }
     }
     setSelectedVendors(newSelected);
   };
@@ -106,21 +119,22 @@ export default function VendorMatching() {
   const getRemainingMaterials = () => {
     const covered = new Set<string>();
     
+    // Mark materials as covered based on actual vendor pricing data
     selectedVendors.forEach(vendorId => {
-      const vendor = vendors.find(v => v.id === vendorId);
-      if (vendor) {
-        vendor.trades?.forEach((trade: string) => {
-          materialsNeeded[trade]?.forEach((material: any) => {
-            covered.add(material.id || `${trade}-${material.description}`);
-          });
+      const coverage = vendorCoverage.get(vendorId);
+      if (coverage && coverage.covered) {
+        coverage.covered.forEach((item: any) => {
+          // Mark this BOM item as covered
+          covered.add(item.bomItemId);
         });
       }
     });
 
+    // Filter out covered materials
     const remaining: any = {};
     Object.keys(materialsNeeded).forEach(trade => {
       const uncovered = materialsNeeded[trade]?.filter((m: any) => 
-        !covered.has(m.id || `${trade}-${m.description}`)
+        !covered.has(m.id)
       ) || [];
       if (uncovered.length > 0) {
         remaining[trade] = uncovered;
