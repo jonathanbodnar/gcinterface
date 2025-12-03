@@ -17,7 +17,7 @@ export class ProjectsService {
     }
 
     const takeoffJob = await this.takeoffPrisma.$queryRaw`
-      SELECT j.*, f.filename, f.url, f.path, f."storageUrl"
+      SELECT j.*, f.filename, f.path
       FROM "jobs" j
       LEFT JOIN "files" f ON j."fileId" = f.id
       WHERE j.id = ${takeoffJobId}
@@ -56,7 +56,7 @@ export class ProjectsService {
 
     // Try to create PlanPage record with PDF from takeoff (non-blocking)
     try {
-      const pdfUrl = (jobData as any).storageUrl || (jobData as any).url || (jobData as any).path;
+      const pdfUrl = (jobData as any).path; // Only use 'path' column that exists
       if (pdfUrl) {
         await this.prisma.planPage.create({
           data: {
@@ -67,9 +67,9 @@ export class ProjectsService {
             materialsOnPage: [],
           },
         });
-        console.log(`📄 Created PlanPage with PDF: ${pdfUrl}`);
+        console.log(`📄 Created PlanPage with PDF path: ${pdfUrl}`);
       } else {
-        console.log('📄 No PDF URL in takeoff files - skipping PlanPage creation');
+        console.log('📄 No PDF path in takeoff files - skipping PlanPage creation');
       }
     } catch (error) {
       // Don't fail the import if PlanPage creation fails
