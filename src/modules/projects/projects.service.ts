@@ -1,44 +1,33 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService, TakeoffPrismaService } from '@/common/prisma/prisma.service';
+import { PrismaService } from '@/common/prisma/prisma.service';
 import { BOMGeneratorService } from '../bom/bom-generator.service';
+import { TakeoffApiService } from '../takeoff/takeoff-api.service';
 
 @Injectable()
 export class ProjectsService {
   constructor(
     private prisma: PrismaService,
-    private takeoffPrisma: TakeoffPrismaService,
+    private takeoffApi: TakeoffApiService,
     private bomGenerator: BOMGeneratorService,
   ) {}
 
   async importFromTakeoff(takeoffJobId: string, userId: string) {
-    // Get job data from takeoff database (READ ONLY)
-    // Note: This uses raw SQL since we're connecting to a different database schema
-    if (!this.takeoffPrisma.client) {
-      throw new NotFoundException('Takeoff database not configured');
+    // Get job data from takeoff API
+    if (!this.takeoffApi.isAvailable()) {
+      throw new NotFoundException('Takeoff API not configured');
     }
 
-    const takeoffJob = await this.takeoffPrisma.$queryRaw`
-      SELECT j.*, f.filename
-      FROM "jobs" j
-      LEFT JOIN "files" f ON j."fileId" = f.id
-      WHERE j.id = ${takeoffJobId}
-    `;
+    const jobData = await this.takeoffApi.getJob(takeoffJobId);
 
-    if (!takeoffJob || takeoffJob.length === 0) {
+    if (!jobData) {
       throw new NotFoundException('Takeoff job not found');
     }
-
-    const jobData = takeoffJob[0];
 
     // Get features to calculate total area
     let totalSF = 0;
     try {
-      const features: any[] = await this.takeoffPrisma.$queryRaw`
-        SELECT * FROM "features" 
-        WHERE "jobId" = ${takeoffJobId} 
-        AND type = 'ROOM'
-      `;
-      totalSF = features.reduce((sum, f) => sum + (f.area || 0), 0);
+      const rooms = await this.takeoffApi.getRooms(takeoffJobId);
+      totalSF = rooms.reduce((sum, room) => sum + (room.area || 0), 0);
     } catch (error) {
       console.warn('Could not calculate total SF:', error.message);
     }
@@ -99,26 +88,28 @@ export class ProjectsService {
       throw new NotFoundException('Project not found');
     }
 
-    // Fetch data from takeoff database using raw SQL
-    if (!this.takeoffPrisma.client) {
+    // Fetch data from takeoff API
+    if (!this.takeoffApi.isAvailable()) {
       return {
         project,
         takeoffData: null,
-        message: 'Takeoff database not configured',
+        message: 'Takeoff API not configured',
       };
     }
 
-    const takeoffJob = await this.takeoffPrisma.$queryRaw`
-      SELECT j.*, f.filename
-      FROM "jobs" j
-      LEFT JOIN "files" f ON j."fileId" = f.id
-      WHERE j.id = ${project.takeoffJobId}
-    `;
-
-    return {
-      project,
-      takeoffData: takeoffJob[0] || null,
-    };
+    try {
+      const takeoffJob = await this.takeoffApi.getJob(project.takeoffJobId);
+      return {
+        project,
+        takeoffData: takeoffJob || null,
+      };
+    } catch (error) {
+      return {
+        project,
+        takeoffData: null,
+        message: error.message,
+      };
+    }
   }
 
   async listProjects(userId?: string) {
@@ -140,42 +131,31 @@ export class ProjectsService {
   }
 
   async listAvailableTakeoffJobs() {
-    // Fetch list of available jobs from takeoff database
+    // Fetch list of available jobs from takeoff API
     console.log('🔍 listAvailableTakeoffJobs called');
-    console.log('🔍 TakeoffPrisma client exists?', !!this.takeoffPrisma.client);
-    console.log('🔍 TAKEOFF_DATABASE_URL set?', !!process.env.TAKEOFF_DATABASE_URL);
+    console.log('🔍 Takeoff API available?', this.takeoffApi.isAvailable());
+    console.log('🔍 TAKEOFF_API_URL set?', !!process.env.TAKEOFF_API_URL);
     
-    if (!this.takeoffPrisma.client) {
-      console.warn('⚠️ Takeoff database client not initialized');
+    if (!this.takeoffApi.isAvailable()) {
+      console.warn('⚠️ Takeoff API not initialized');
       return {
         jobs: [],
-        message: 'Takeoff database not configured',
+        message: 'Takeoff API not configured',
         debug: {
-          clientExists: !!this.takeoffPrisma.client,
-          envVarSet: !!process.env.TAKEOFF_DATABASE_URL,
-          envVarValue: process.env.TAKEOFF_DATABASE_URL ? 'Set (hidden)' : 'Not set',
+          apiAvailable: this.takeoffApi.isAvailable(),
+          envVarSet: !!process.env.TAKEOFF_API_URL,
+          envVarValue: process.env.TAKEOFF_API_URL || 'Not set',
         },
       };
     }
 
     try {
-      console.log('🔍 Attempting to query takeoff database...');
+      console.log('🔍 Fetching jobs from takeoff API...');
       
-      // Query jobs from gclegacy database
-      const jobs = await this.takeoffPrisma.$queryRaw`
-        SELECT 
-          j.id, 
-          f.filename,
-          j.status,
-          j."createdAt",
-          j."updatedAt"
-        FROM "jobs" j
-        LEFT JOIN "files" f ON j."fileId" = f.id
-        ORDER BY j."createdAt" DESC
-        LIMIT 50
-      `;
+      // Get jobs from takeoff API
+      const jobs = await this.takeoffApi.listJobs();
       
-      console.log(`✅ Found ${jobs.length} jobs in takeoff database`);
+      console.log(`✅ Found ${jobs.length} jobs from takeoff API`);
 
       // Get already imported job IDs
       const importedProjects = await this.prisma.project.findMany({
@@ -194,10 +174,10 @@ export class ProjectsService {
         total: jobs.length,
       };
     } catch (error) {
-      console.error('Error fetching takeoff jobs:', error);
+      console.error('❌ Error fetching takeoff jobs:', error);
       return {
         jobs: [],
-        message: 'Failed to fetch takeoff jobs',
+        message: 'Failed to fetch takeoff jobs from API',
         error: error.message,
       };
     }

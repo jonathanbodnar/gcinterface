@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService, TakeoffPrismaService } from '@/common/prisma/prisma.service';
+import { PrismaService } from '@/common/prisma/prisma.service';
 import { MaterialsService } from '../materials/materials.service';
+import { TakeoffApiService } from '../takeoff/takeoff-api.service';
 
 interface TakeoffFeature {
   type: string;
@@ -17,7 +18,7 @@ interface TakeoffFeature {
 export class BOMGeneratorService {
   constructor(
     private prisma: PrismaService,
-    private takeoffPrisma: TakeoffPrismaService,
+    private takeoffApi: TakeoffApiService,
     private materialsService: MaterialsService,
   ) {}
 
@@ -42,29 +43,17 @@ export class BOMGeneratorService {
 
     const bomItems = [];
 
-    // Fetch features from takeoff database
-    if (this.takeoffPrisma.client) {
+    // Fetch features from takeoff API
+    if (this.takeoffApi.isAvailable()) {
       try {
         // Get rooms for flooring, paint, ceiling calculations
-        const rooms: any[] = await this.takeoffPrisma.$queryRaw`
-          SELECT * FROM "Feature" 
-          WHERE "jobId" = ${project.takeoffJobId} 
-          AND type = 'ROOM'
-        `;
+        const rooms = await this.takeoffApi.getRooms(project.takeoffJobId);
 
         // Get pipes for plumbing calculations
-        const pipes: any[] = await this.takeoffPrisma.$queryRaw`
-          SELECT * FROM "Feature"
-          WHERE "jobId" = ${project.takeoffJobId}
-          AND type = 'PIPE'
-        `;
+        const pipes = await this.takeoffApi.getPipes(project.takeoffJobId);
 
         // Get fixtures
-        const fixtures: any[] = await this.takeoffPrisma.$queryRaw`
-          SELECT * FROM "Feature"
-          WHERE "jobId" = ${project.takeoffJobId}
-          AND type IN ('FIXTURE', 'EQUIPMENT')
-        `;
+        const fixtures = await this.takeoffApi.getFixtures(project.takeoffJobId);
 
         // Generate BOM items from rooms
         for (const room of rooms) {
