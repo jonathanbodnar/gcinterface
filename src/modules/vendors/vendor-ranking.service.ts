@@ -49,12 +49,23 @@ export class VendorRankingService {
       const priceComparisons = [];
 
       for (const bomItem of bomItems) {
-        if (!bomItem.materialId) continue;
+        // Try exact ID match first
+        let vendorPrice = bomItem.materialId 
+          ? vendor.materialPricing.find(p => p.materialId === bomItem.materialId)
+          : null;
 
-        // Find vendor's price for this material
-        const vendorPrice = vendor.materialPricing.find(
-          p => p.materialId === bomItem.materialId
-        );
+        // If no exact match, try fuzzy name matching
+        if (!vendorPrice && bomItem.description) {
+          vendorPrice = vendor.materialPricing.find(p => {
+            if (!p.material?.name) return false;
+            const similarity = this.calculateSimilarity(bomItem.description, p.material.name);
+            return similarity > 0.7; // 70% threshold
+          });
+          
+          if (vendorPrice) {
+            console.log(`🔗 Fuzzy matched "${bomItem.description}" to "${vendorPrice.material?.name}"`);
+          }
+        }
 
         if (vendorPrice) {
           const itemCost = vendorPrice.unitCost * bomItem.finalQty;
@@ -64,7 +75,7 @@ export class VendorRankingService {
           // Get market average for comparison
           const allPrices = await this.prisma.vendorMaterialPricing.findMany({
             where: {
-              materialId: bomItem.materialId,
+              materialId: vendorPrice.materialId,
               active: true,
             },
           });
@@ -147,5 +158,43 @@ export class VendorRankingService {
       },
     };
   }
-}
 
+  async rankVendorsByProject(projectId: string) {
+    return this.rankVendorsByPrice(projectId);
+  }
+
+  /**
+   * Calculate similarity between two strings (0-1 score)
+   * Uses word-based comparison for fuzzy matching
+   */
+  private calculateSimilarity(str1: string, str2: string): number {
+    const s1 = str1.toLowerCase().trim();
+    const s2 = str2.toLowerCase().trim();
+
+    // Exact match
+    if (s1 === s2) return 1.0;
+
+    // Normalize: remove extra spaces, punctuation
+    const normalize = (s: string) => s.replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
+    const n1 = normalize(s1);
+    const n2 = normalize(s2);
+
+    if (n1 === n2) return 0.95;
+
+    // Word-based matching
+    const words1 = n1.split(' ').filter(w => w.length > 2); // Ignore short words
+    const words2 = n2.split(' ').filter(w => w.length > 2);
+    
+    if (words1.length === 0 || words2.length === 0) return 0;
+    
+    const commonWords = words1.filter(w => words2.includes(w));
+    const totalWords = Math.max(words1.length, words2.length);
+    
+    const wordMatchScore = commonWords.length / totalWords;
+
+    // Substring matching bonus
+    const substringBonus = (s1.includes(s2) || s2.includes(s1)) ? 0.1 : 0;
+
+    return Math.min(wordMatchScore + substringBonus, 1.0);
+  }
+}

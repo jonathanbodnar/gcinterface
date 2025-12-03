@@ -56,17 +56,22 @@ export class BOMGeneratorService {
         // Convert takeoff materials to BOM items
         for (const material of materials) {
           try {
+            // Try to find matching material in interface database by name similarity
+            const materialName = material.name || material.description || 'Material';
+            const matchingMaterial = await this.findMatchingMaterial(materialName, material.category);
+            
             bomItems.push(
               await this.createBOMItem(projectId, estimate.id, {
-                csiDivision: material.csiCode || material.csi || '00 00 00',
-                category: material.category || material.type || 'General',
-                description: material.name || material.description || 'Material',
-                sku: material.id || `MAT-${material.name?.substring(0, 10)}`,
+                csiDivision: material.csiCode || material.csi || matchingMaterial?.csiDivision || '00 00 00',
+                category: material.category || material.type || matchingMaterial?.category || 'General',
+                description: materialName,
+                sku: matchingMaterial?.sku || material.id || `MAT-${materialName.substring(0, 10)}`,
                 quantity: material.quantity || material.count || 1,
-                uom: material.unit || material.uom || 'EA',
+                uom: material.unit || material.uom || matchingMaterial?.uom || 'EA',
                 wasteFactor: 0.05,
                 source: 'Imported from takeoff',
                 confidence: material.confidence || 0.85,
+                materialId: matchingMaterial?.id, // Link to existing material if found
               }),
             );
           } catch (error) {
@@ -404,6 +409,79 @@ export class BOMGeneratorService {
     };
 
     return estimates[category]?.[uom] || 10.00;
+  }
+
+  /**
+   * Find matching material in interface database by name similarity
+   * Uses fuzzy matching to handle variations like:
+   * - "VCT Flooring 12x12" vs "VCT Flooring 12x12 Tile"
+   * - "Copper Pipe Type L 1"" vs "Copper Pipe 1" Type L"
+   */
+  private async findMatchingMaterial(name: string, category?: string): Promise<any | null> {
+    try {
+      // Get all materials from interface database
+      const allMaterials = await this.prisma.material.findMany({
+        where: category ? { category } : {},
+      });
+
+      if (allMaterials.length === 0) return null;
+
+      // Calculate similarity score for each material
+      const matches = allMaterials.map(m => ({
+        material: m,
+        score: this.calculateSimilarity(name, m.name),
+      }));
+
+      // Sort by score and take best match
+      matches.sort((a, b) => b.score - a.score);
+      const bestMatch = matches[0];
+
+      // Only use match if similarity is above 70%
+      if (bestMatch.score > 0.7) {
+        console.log(`🔗 Matched "${name}" to "${bestMatch.material.name}" (${(bestMatch.score * 100).toFixed(0)}% similar)`);
+        return bestMatch.material;
+      }
+
+      return null;
+    } catch (error) {
+      console.warn('Error finding matching material:', error.message);
+      return null;
+    }
+  }
+
+  /**
+   * Calculate similarity between two strings (0-1 score)
+   * Uses a simple word-based comparison
+   */
+  private calculateSimilarity(str1: string, str2: string): number {
+    const s1 = str1.toLowerCase().trim();
+    const s2 = str2.toLowerCase().trim();
+
+    // Exact match
+    if (s1 === s2) return 1.0;
+
+    // Normalize: remove extra spaces, punctuation
+    const normalize = (s: string) => s.replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
+    const n1 = normalize(s1);
+    const n2 = normalize(s2);
+
+    if (n1 === n2) return 0.95;
+
+    // Word-based matching
+    const words1 = n1.split(' ');
+    const words2 = n2.split(' ');
+    
+    const commonWords = words1.filter(w => words2.includes(w));
+    const totalWords = Math.max(words1.length, words2.length);
+    
+    if (totalWords === 0) return 0;
+    
+    const wordMatchScore = commonWords.length / totalWords;
+
+    // Substring matching bonus
+    const substringBonus = (s1.includes(s2) || s2.includes(s1)) ? 0.1 : 0;
+
+    return Math.min(wordMatchScore + substringBonus, 1.0);
   }
 }
 
