@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import * as sgMail from '@sendgrid/mail';
+import { PDFGeneratorService } from './pdf-generator.service';
 
 @Injectable()
 export class RFQService {
@@ -11,6 +12,7 @@ export class RFQService {
   constructor(
     private prisma: PrismaService,
     private configService: ConfigService,
+    private pdfGenerator: PDFGeneratorService,
   ) {
     // Initialize SendGrid
     const apiKey = this.configService.get('SENDGRID_API_KEY');
@@ -141,30 +143,31 @@ export class RFQService {
       throw new Error(`Vendor ${rfq.vendor.name} does not have an email address`);
     }
 
-    // Get email template based on vendor type
-    const isContractor = rfq.vendor.type === 'SUBCONTRACTOR' || rfq.vendor.type === 'BOTH';
-    const templateName = isContractor ? 'RFQ Template - Subcontractors' : 'RFQ Template - Material Suppliers';
-    
+    // Get email template - first try to find ANY active RFQ template
+    // Users create templates without specific names, so just use type
     let template = await this.prisma.emailTemplate.findFirst({
       where: {
         type: 'RFQ',
-        name: templateName,
         active: true,
+      },
+      orderBy: {
+        createdAt: 'desc', // Use most recent template
       },
     });
 
-    // Fallback to any RFQ template if specific one not found
-    if (!template) {
-      template = await this.prisma.emailTemplate.findFirst({
-        where: {
-          type: 'RFQ',
-          active: true,
-        },
-      });
+    if (template) {
+      this.logger.log(`Using RFQ template: ${template.name || 'Unnamed'}`);
+    } else {
+      this.logger.warn('No RFQ template found in database, using default template');
     }
 
     // Generate email body
     const emailBody = this.generateRFQEmail(rfq, template);
+
+    // Generate PDF attachment
+    this.logger.log('Generating PDF attachment for RFQ...');
+    const pdfBuffer = await this.pdfGenerator.generateRFQPDF(rfqId);
+    const pdfBase64 = pdfBuffer.toString('base64');
 
     // Send email via SendGrid
     const fromEmail = this.configService.get('SENDGRID_FROM_EMAIL') || 'noreply@gclegacy.com';
@@ -181,9 +184,19 @@ export class RFQService {
         html: emailBody,
         // Add reply-to for quote responses
         replyTo: this.configService.get('SENDGRID_REPLY_TO') || 'quotes@mail.gclegacy.com',
+        // Attach PDF
+        attachments: [
+          {
+            content: pdfBase64,
+            filename: `RFQ-${rfq.rfqNumber}.pdf`,
+            type: 'application/pdf',
+            disposition: 'attachment',
+          },
+        ],
       };
 
       const response = await sgMail.send(msg);
+      this.logger.log(`📧 RFQ sent to ${rfq.vendor.name} with PDF attachment`);
       this.logger.log(`📧 RFQ sent to ${rfq.vendor.name} (${rfq.vendor.email})`);
 
       // Update RFQ status
