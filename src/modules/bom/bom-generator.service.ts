@@ -42,32 +42,65 @@ export class BOMGeneratorService {
 
     const bomItems = [];
 
-    // Fetch features from takeoff database
+    // Fetch materials from takeoff database
     if (this.takeoffPrisma.client) {
       try {
-        // Get rooms for flooring, paint, ceiling calculations
-        const rooms: any[] = await this.takeoffPrisma.$queryRaw`
-          SELECT * FROM "Feature" 
-          WHERE "jobId" = ${project.takeoffJobId} 
-          AND type = 'ROOM'
-        `;
-
-        // Get pipes for plumbing calculations
-        const pipes: any[] = await this.takeoffPrisma.$queryRaw`
-          SELECT * FROM "Feature"
+        // Try to get materials directly from materials table
+        const materials: any[] = await this.takeoffPrisma.$queryRaw`
+          SELECT * FROM "materials" 
           WHERE "jobId" = ${project.takeoffJobId}
-          AND type = 'PIPE'
         `;
 
-        // Get fixtures
-        const fixtures: any[] = await this.takeoffPrisma.$queryRaw`
-          SELECT * FROM "Feature"
-          WHERE "jobId" = ${project.takeoffJobId}
-          AND type IN ('FIXTURE', 'EQUIPMENT')
-        `;
+        console.log(`📦 Found ${materials.length} materials from takeoff database`);
 
-        // Generate BOM items from rooms
-        for (const room of rooms) {
+        // Convert takeoff materials to BOM items
+        for (const material of materials) {
+          try {
+            bomItems.push(
+              await this.createBOMItem(projectId, estimate.id, {
+                csiDivision: material.csiCode || material.csi || '00 00 00',
+                category: material.category || material.type || 'General',
+                description: material.name || material.description || 'Material',
+                sku: material.id || `MAT-${material.name?.substring(0, 10)}`,
+                quantity: material.quantity || material.count || 1,
+                uom: material.unit || material.uom || 'EA',
+                wasteFactor: 0.05,
+                source: 'Imported from takeoff',
+                confidence: material.confidence || 0.85,
+              }),
+            );
+          } catch (error) {
+            console.warn(`⚠️ Failed to create BOM item for material ${material.id}:`, error.message);
+          }
+        }
+
+        // If no materials found in materials table, try Feature table as fallback
+        if (materials.length === 0) {
+          console.log('⚠️ No materials in materials table, using Feature table as fallback');
+          
+          // Get rooms for flooring, paint, ceiling calculations
+          const rooms: any[] = await this.takeoffPrisma.$queryRaw`
+            SELECT * FROM "Feature" 
+            WHERE "jobId" = ${project.takeoffJobId} 
+            AND type = 'ROOM'
+          `;
+
+          // Get pipes for plumbing calculations
+          const pipes: any[] = await this.takeoffPrisma.$queryRaw`
+            SELECT * FROM "Feature"
+            WHERE "jobId" = ${project.takeoffJobId}
+            AND type = 'PIPE'
+          `;
+
+          // Get fixtures
+          const fixtures: any[] = await this.takeoffPrisma.$queryRaw`
+            SELECT * FROM "Feature"
+            WHERE "jobId" = ${project.takeoffJobId}
+            AND type IN ('FIXTURE', 'EQUIPMENT')
+          `;
+
+          // Generate BOM items from rooms
+          for (const room of rooms) {
           // VCT Flooring
           if (room.area && room.area > 0) {
             bomItems.push(
@@ -115,10 +148,10 @@ export class BOMGeneratorService {
               }),
             );
           }
-        }
+          }
 
-        // Generate BOM items from pipes
-        for (const pipe of pipes) {
+          // Generate BOM items from pipes
+          for (const pipe of pipes) {
           if (pipe.length && pipe.length > 0) {
             const pipeType = this.identifyPipeType(pipe);
             bomItems.push(
@@ -151,10 +184,10 @@ export class BOMGeneratorService {
               }),
             );
           }
-        }
+          }
 
-        // Generate BOM items from fixtures
-        for (const fixture of fixtures) {
+          // Generate BOM items from fixtures
+          for (const fixture of fixtures) {
           const fixtureType = this.identifyFixtureType(fixture);
           bomItems.push(
             await this.createBOMItem(projectId, estimate.id, {
@@ -169,6 +202,7 @@ export class BOMGeneratorService {
               confidence: 0.95,
             }),
           );
+          }
         }
       } catch (error) {
         console.error('Error generating BOM from takeoff:', error.message);
