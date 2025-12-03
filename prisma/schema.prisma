@@ -15,21 +15,21 @@ datasource db {
 // ============================================================================
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String
-  role      UserRole @default(ESTIMATOR)
-  password  String // Hashed
-  active    Boolean  @default(true)
-  
+  id       String   @id @default(cuid())
+  email    String   @unique
+  name     String
+  role     UserRole @default(ESTIMATOR)
+  password String // Hashed
+  active   Boolean  @default(true)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relations
-  projects      Project[]
-  estimates     Estimate[]
-  rfqsSent      RFQ[]
-  awardsIssued  Subcontract[]
+  projects     Project[]
+  estimates    Estimate[]
+  rfqsSent     RFQ[]
+  awardsIssued Subcontract[]
 
   @@map("users")
 }
@@ -47,49 +47,51 @@ enum UserRole {
 // ============================================================================
 
 model Project {
-  id          String  @id @default(cuid())
-  name        String
-  location    String
-  clientName  String?
-  totalSF     Float?
-  
+  id         String  @id @default(cuid())
+  name       String
+  location   String
+  clientId   String? // Link to client for markup hierarchy
+  clientName String? // Deprecated: use client.name instead
+  totalSF    Float?
+
   // Link to takeoff database job
-  takeoffJobId String  @unique // Job ID from gclegacy takeoff database
-  
+  takeoffJobId String @unique // Job ID from gclegacy takeoff database
+
   // Project details
-  planDate    DateTime?
-  bidDate     DateTime?
-  dueDate     DateTime? // Admin-set deadline
-  
+  planDate DateTime?
+  bidDate  DateTime?
+  dueDate  DateTime? // Admin-set deadline
+
   // Workflow status
-  status      ProjectStatus @default(SCOPE_DIAGNOSIS)
-  
+  status ProjectStatus @default(SCOPE_DIAGNOSIS)
+
   // Business outcome
   projectOutcome String? // "Awarded", "Lost", "Pending"
   awardedDate    DateTime?
   awardedAmount  Float?
   lostReason     String?
-  
+
   // Current stage
-  currentStage   String? // "Collecting Bids", "In Progress", "Completed"
-  
+  currentStage String? // "Collecting Bids", "In Progress", "Completed"
+
   // Bid tracking
-  rfqsSent       Int @default(0)
-  quotesReceived Int @default(0)
+  rfqsSent       Int    @default(0)
+  quotesReceived Int    @default(0)
   responseRate   Float?
-  
+
   createdById String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   // Relations
-  createdBy     User          @relation(fields: [createdById], references: [id])
-  estimates     Estimate[]
-  boms          BOM[]
-  rfqs          RFQ[]
-  quotes        Quote[]
-  subcontracts  Subcontract[]
-  planPages     PlanPage[]
+  createdBy    User          @relation(fields: [createdById], references: [id])
+  client       Client?       @relation(fields: [clientId], references: [id])
+  estimates    Estimate[]
+  boms         BOM[]
+  rfqs         RFQ[]
+  quotes       Quote[]
+  subcontracts Subcontract[]
+  planPages    PlanPage[]
 
   @@map("projects")
 }
@@ -124,47 +126,48 @@ enum ProjectStage {
 // ============================================================================
 
 model Material {
-  id           String  @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // Core identification
-  name         String // Material name
-  description  String? // Full description
-  sku          String? // SKU if available
-  category     String? // CSI division or category
-  trade        String // M, E, P, A, S, F
-  
+  name        String // Material name
+  description String? // Full description
+  sku         String? // SKU if available
+  category    String? // CSI division or category
+  trade       String // M, E, P, A, S, F
+
   // Specifications (from takeoff)
   manufacturer String?
   model        String?
   specs        Json? // All specifications from takeoff
-  
+
   // Pricing: NOW VENDOR-SPECIFIC (see VendorMaterialPricing)
   // REMOVED: unitCost (moved to vendor-specific pricing)
-  uom          String? // Unit of measure
-  
+  uom String? // Unit of measure
+
   // Labor (admin configured, vendor-agnostic)
-  laborHours   Float? // Hours per unit
-  wasteFactor  Float  @default(0.07) // 7% default waste
-  
+  laborHours  Float? // Hours per unit
+  wasteFactor Float  @default(0.07) // 7% default waste
+
   // Sourcing
   commonSuppliers String[] // Vendors who commonly supply this
   requiredVendor  String? // If plan-specified vendor required
-  
+
   // Tracking
-  timesUsed    Int    @default(0) // How many projects used this
-  lastUsed     DateTime?
-  firstSeen    DateTime @default(now()) // When first imported
-  
+  timesUsed Int       @default(0) // How many projects used this
+  lastUsed  DateTime?
+  firstSeen DateTime  @default(now()) // When first imported
+
   // Metadata
-  active       Boolean @default(true)
-  notes        String? // Admin notes
-  
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  active Boolean @default(true)
+  notes  String? // Admin notes
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  bomItems     BOM[]
+  bomItems      BOM[]
   vendorPricing VendorMaterialPricing[]
+  markups       MaterialMarkup[]
 
   @@unique([name, trade]) // Prevent duplicates by name+trade
   @@map("materials")
@@ -172,36 +175,36 @@ model Material {
 
 // Vendor-Specific Material Pricing
 model VendorMaterialPricing {
-  id              String @id @default(cuid())
-  vendorId        String
-  materialId      String
-  
+  id         String @id @default(cuid())
+  vendorId   String
+  materialId String
+
   // Pricing
-  unitCost        Float
-  uom             String? // Should match material.uom
-  
+  unitCost Float
+  uom      String? // Should match material.uom
+
   // Terms
-  leadTimeDays    Int?
-  minimumOrder    Float?
-  discountTiers   Json? // [{qty: 1000, discount: 0.05}]
-  
+  leadTimeDays  Int?
+  minimumOrder  Float?
+  discountTiers Json? // [{qty: 1000, discount: 0.05}]
+
   // Validity
-  effectiveDate   DateTime @default(now())
-  expiryDate      DateTime?
-  lastQuoteDate   DateTime? // When this price was last seen in a quote
-  
+  effectiveDate DateTime  @default(now())
+  expiryDate    DateTime?
+  lastQuoteDate DateTime? // When this price was last seen in a quote
+
   // Source tracking
-  quotedBy        String? // User who entered/approved
-  sourceQuoteId   String? // Quote ID where this price came from
-  
-  active          Boolean @default(true)
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  
-  vendor          Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
-  material        Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
-  
+  quotedBy      String? // User who entered/approved
+  sourceQuoteId String? // Quote ID where this price came from
+
+  active Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  vendor   Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  material Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
   @@unique([vendorId, materialId])
   @@index([materialId])
   @@index([vendorId])
@@ -213,32 +216,32 @@ model VendorMaterialPricing {
 // ============================================================================
 
 model Estimate {
-  id          String  @id @default(cuid())
-  projectId   String
-  version     String  @default("1.0")
-  status      EstimateStatus @default(DRAFT)
-  
+  id        String         @id @default(cuid())
+  projectId String
+  version   String         @default("1.0")
+  status    EstimateStatus @default(DRAFT)
+
   // Totals
-  materialCost  Float   @default(0)
-  laborCost     Float   @default(0)
-  equipmentCost Float   @default(0)
-  subtotal      Float   @default(0)
-  markup        Float   @default(0) // Percentage
-  contingency   Float   @default(0) // Percentage
-  totalCost     Float   @default(0)
-  
+  materialCost  Float @default(0)
+  laborCost     Float @default(0)
+  equipmentCost Float @default(0)
+  subtotal      Float @default(0)
+  markup        Float @default(0) // Percentage
+  contingency   Float @default(0) // Percentage
+  totalCost     Float @default(0)
+
   // Confidence
   confidenceScore Float? // 0-100%
   riskScore       Float? // 0-100%
-  
+
   createdById String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   // Relations
-  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  createdBy   User      @relation(fields: [createdById], references: [id])
-  bomItems    BOM[]
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy User    @relation(fields: [createdById], references: [id])
+  bomItems  BOM[]
 
   @@map("estimates")
 }
@@ -252,50 +255,50 @@ enum EstimateStatus {
 }
 
 model BOM {
-  id          String  @id @default(cuid())
-  projectId   String
-  estimateId  String?
-  materialId  String? // Link to materials database
-  
+  id         String  @id @default(cuid())
+  projectId  String
+  estimateId String?
+  materialId String? // Link to materials database
+
   // Item details (denormalized for performance)
-  csiDivision String? // CSI division code
-  category    String  // Flooring, Plumbing, HVAC, etc.
-  description String
-  sku         String?
+  csiDivision  String? // CSI division code
+  category     String // Flooring, Plumbing, HVAC, etc.
+  description  String
+  sku          String?
   manufacturer String?
-  model       String?
-  specs       Json?
-  
+  model        String?
+  specs        Json?
+
   // Quantities
   quantity    Float
   uom         String // Unit of measure
-  wasteFactor Float   @default(0) // Percentage
+  wasteFactor Float  @default(0) // Percentage
   finalQty    Float // quantity * (1 + wasteFactor)
-  
+
   // Costs
-  unitCost    Float?
-  laborHours  Float?
-  laborRate   Float?
-  totalCost   Float?
-  
+  unitCost   Float?
+  laborHours Float?
+  laborRate  Float?
+  totalCost  Float?
+
   // Metadata
-  confidence  Float?  // Confidence score 0-100%
-  source      String? // Extracted from takeoff, manual, AI-generated
-  notes       String?
-  
+  confidence Float? // Confidence score 0-100%
+  source     String? // Extracted from takeoff, manual, AI-generated
+  notes      String?
+
   // Alternates/VE
   hasAlternate Boolean @default(false)
   alternates   Json? // Array of alternate options
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  estimate    Estimate?  @relation(fields: [estimateId], references: [id])
-  material    Material?  @relation(fields: [materialId], references: [id])
-  rfqItems    RFQItem[]
-  quoteItems  QuoteItem[]
+  project    Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  estimate   Estimate?   @relation(fields: [estimateId], references: [id])
+  material   Material?   @relation(fields: [materialId], references: [id])
+  rfqItems   RFQItem[]
+  quoteItems QuoteItem[]
 
   @@map("bom_items")
 }
@@ -305,66 +308,66 @@ model BOM {
 // ============================================================================
 
 model Vendor {
-  id          String  @id @default(cuid())
-  name        String
-  type        VendorType
-  
+  id   String     @id @default(cuid())
+  name String
+  type VendorType
+
   // Contact info
-  email       String
-  phone       String?
-  address     String?
-  city        String?
-  state       String?
-  zipCode     String?
-  website     String?
+  email         String
+  phone         String?
+  address       String?
+  city          String?
+  state         String?
+  zipCode       String?
+  website       String?
   contactPerson String?
-  
+
   // Location for proximity
-  latitude    Float?
-  longitude   Float?
-  
+  latitude  Float?
+  longitude Float?
+
   // Trade specialties
-  trades      String[] // M, E, P, etc.
-  
+  trades String[] // M, E, P, etc.
+
   // SUPPLIER-SPECIFIC FIELDS
   materials   String[] // Types of materials they supply
   alternates  String[] // Alternative products for value engineering
   isRequired  Boolean  @default(false) // Plan-specified required vendor
   requiredFor String[] // Specific materials they're required for
-  
+
   // CONTRACTOR-SPECIFIC FIELDS
-  services    String[] // Services: Drywall, Taping, Paint, Tile
-  crewSize    Int?     // Number of crew members
-  equipmentList String[] // Equipment they own
+  services       String[] // Services: Drywall, Taping, Paint, Tile
+  crewSize       Int? // Number of crew members
+  equipmentList  String[] // Equipment they own
   certifications String[] // OSHA, licenses, EPA, etc.
-  insurance   Json?    // {liability, workers_comp, expiry}
-  
+  insurance      Json? // {liability, workers_comp, expiry}
+
   // Performance
-  rating      Float?   @default(0)
-  reliability Float?   @default(0)
-  pastProjects Int?    @default(0)
-  
+  rating       Float? @default(0)
+  reliability  Float? @default(0)
+  pastProjects Int?   @default(0)
+
   // Service area
-  serviceRadius Int?   // Miles from their location
+  serviceRadius    Int? // Miles from their location
   preferredRegions String[] // Areas they prefer to work
-  
+
   // Financial
   paymentTerms String? // Net 30, Net 60, etc.
   creditLimit  Float?
-  
+
   // Notes
-  notes       String?
+  notes         String?
   internalNotes String? // Private admin notes
-  
-  active      Boolean  @default(true)
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+
+  active Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  rfqs        RFQ[]
-  quotes      Quote[]
-  subcontracts Subcontract[]
+  rfqs            RFQ[]
+  quotes          Quote[]
+  subcontracts    Subcontract[]
   materialPricing VendorMaterialPricing[]
 
   @@map("vendors")
@@ -381,31 +384,31 @@ enum VendorType {
 // ============================================================================
 
 model RFQ {
-  id          String  @id @default(cuid())
-  projectId   String
-  vendorId    String
-  
+  id        String @id @default(cuid())
+  projectId String
+  vendorId  String
+
   // RFQ details
-  rfqNumber   String  @unique
-  subject     String
-  dueDate     DateTime?
-  
+  rfqNumber String    @unique
+  subject   String
+  dueDate   DateTime?
+
   // Email info
-  sentAt      DateTime?
-  sentBy      String?
-  emailBody   String?
-  
-  status      RFQStatus @default(DRAFT)
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  sentAt    DateTime?
+  sentBy    String?
+  emailBody String?
+
+  status RFQStatus @default(DRAFT)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  vendor      Vendor    @relation(fields: [vendorId], references: [id])
-  sentByUser  User?     @relation(fields: [sentBy], references: [id])
-  items       RFQItem[]
-  quote       Quote?
+  project    Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  vendor     Vendor    @relation(fields: [vendorId], references: [id])
+  sentByUser User?     @relation(fields: [sentBy], references: [id])
+  items      RFQItem[]
+  quote      Quote?
 
   @@map("rfqs")
 }
@@ -419,19 +422,19 @@ enum RFQStatus {
 }
 
 model RFQItem {
-  id          String  @id @default(cuid())
-  rfqId       String
-  bomItemId   String
-  
+  id        String @id @default(cuid())
+  rfqId     String
+  bomItemId String
+
   quantity    Float
   uom         String
   description String
-  
-  createdAt   DateTime @default(now())
+
+  createdAt DateTime @default(now())
 
   // Relations
-  rfq         RFQ @relation(fields: [rfqId], references: [id], onDelete: Cascade)
-  bomItem     BOM @relation(fields: [bomItemId], references: [id])
+  rfq     RFQ @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  bomItem BOM @relation(fields: [bomItemId], references: [id])
 
   @@map("rfq_items")
 }
@@ -441,31 +444,31 @@ model RFQItem {
 // ============================================================================
 
 model Quote {
-  id          String  @id @default(cuid())
-  projectId   String
-  vendorId    String
-  rfqId       String  @unique
-  
+  id        String @id @default(cuid())
+  projectId String
+  vendorId  String
+  rfqId     String @unique
+
   // Quote details
   quoteNumber String?
   totalAmount Float
   validUntil  DateTime?
-  
+
   // VE alternatives
-  hasVE       Boolean @default(false)
-  veNotes     String?
-  
-  status      QuoteStatus @default(RECEIVED)
-  
-  receivedAt  DateTime @default(now())
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  hasVE   Boolean @default(false)
+  veNotes String?
+
+  status QuoteStatus @default(RECEIVED)
+
+  receivedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   // Relations
-  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  vendor      Vendor      @relation(fields: [vendorId], references: [id])
-  rfq         RFQ         @relation(fields: [rfqId], references: [id])
-  items       QuoteItem[]
+  project Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  vendor  Vendor      @relation(fields: [vendorId], references: [id])
+  rfq     RFQ         @relation(fields: [rfqId], references: [id])
+  items   QuoteItem[]
 
   @@map("quotes")
 }
@@ -479,34 +482,34 @@ enum QuoteStatus {
 }
 
 model QuoteItem {
-  id          String  @id @default(cuid())
-  quoteId     String
-  bomItemId   String
-  
+  id        String @id @default(cuid())
+  quoteId   String
+  bomItemId String
+
   description String
   quantity    Float
   uom         String
   unitPrice   Float
   totalPrice  Float
-  
+
   // Alternative/Substitution tracking
-  isAlternate Boolean @default(false)
-  alternateFor String? // Original BOM item ID this replaces
+  isAlternate   Boolean @default(false)
+  alternateFor  String? // Original BOM item ID this replaces
   alternateType String? // "VE", "Equivalent", "Upgrade"
-  manufacturer String? // For tracking brand substitutions
-  model String?
-  
+  manufacturer  String? // For tracking brand substitutions
+  model         String?
+
   // Coverage tracking
-  matchType String? // "EXACT", "ALTERNATIVE", "PARTIAL"
+  matchType       String? // "EXACT", "ALTERNATIVE", "PARTIAL"
   matchConfidence Float? // 0-1 score for fuzzy matching
-  
-  notes       String?
-  
-  createdAt   DateTime @default(now())
+
+  notes String?
+
+  createdAt DateTime @default(now())
 
   // Relations
-  quote       Quote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
-  bomItem     BOM   @relation(fields: [bomItemId], references: [id])
+  quote   Quote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  bomItem BOM   @relation(fields: [bomItemId], references: [id])
 
   @@map("quote_items")
 }
@@ -516,34 +519,34 @@ model QuoteItem {
 // ============================================================================
 
 model Subcontract {
-  id          String  @id @default(cuid())
-  projectId   String
-  vendorId    String
-  
-  trade       String // M, E, P, etc.
+  id        String @id @default(cuid())
+  projectId String
+  vendorId  String
+
+  trade          String // M, E, P, etc.
   contractNumber String @unique
-  
+
   // Scope
   scopeOfWork String
   materials   Json // Array of included materials
   schedule    Json? // Gantt chart data
-  
+
   // Pricing
   contractAmount Float
   paymentTerms   String?
-  
+
   // Status
-  status      SubcontractStatus @default(DRAFT)
-  awardedAt   DateTime?
-  awardedBy   String?
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  status    SubcontractStatus @default(DRAFT)
+  awardedAt DateTime?
+  awardedBy String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  vendor      Vendor  @relation(fields: [vendorId], references: [id])
-  awardedByUser User? @relation(fields: [awardedBy], references: [id])
+  project       Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  vendor        Vendor  @relation(fields: [vendorId], references: [id])
+  awardedByUser User?   @relation(fields: [awardedBy], references: [id])
 
   @@map("subcontracts")
 }
@@ -561,43 +564,112 @@ enum SubcontractStatus {
 // ============================================================================
 
 model MaterialRule {
-  id          String  @id @default(cuid())
-  trade       String // M, E, P, A
-  material    String
-  costPerUnit Float
+  id           String @id @default(cuid())
+  trade        String // M, E, P, A
+  material     String
+  costPerUnit  Float
   laborPerUnit Float?
-  uom         String
-  
-  active      Boolean @default(true)
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  uom          String
+
+  active Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("material_rules")
 }
 
-model TradeMarkup {
-  id          String  @id @default(cuid())
-  trade       String  @unique // M, E, P, A
-  markup      Float // Percentage
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+// ============================================================================
+// CLIENT MANAGEMENT
+// ============================================================================
 
+model Client {
+  id   String @id @default(cuid())
+  name String
+
+  // Contact Information
+  contactName String?
+  email       String?
+  phone       String?
+  address     String?
+  city        String?
+  state       String?
+  zipCode     String?
+
+  // Master Markup (applies when no material or trade markup exists)
+  defaultMarkup Float? // Percentage
+
+  // Payment Terms
+  paymentTerms String? // "Net 30", "2/10 Net 30", etc.
+  creditLimit  Float?
+
+  active Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  projects        Project[]
+  tradeMarkups    TradeMarkup[]
+  materialMarkups MaterialMarkup[]
+
+  @@map("clients")
+}
+
+// Material-specific markup (highest priority)
+model MaterialMarkup {
+  id         String  @id @default(cuid())
+  clientId   String?
+  materialId String
+  markup     Float // Percentage
+
+  // Optional: restrict to specific project types or trades
+  applicableTrades String[] // Empty = all trades
+  notes            String?
+
+  active Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  client   Client?  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  material Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, materialId])
+  @@map("material_markups")
+}
+
+// Trade-level markup (medium priority)
+model TradeMarkup {
+  id       String  @id @default(cuid())
+  clientId String? // NULL = global default for all clients
+  trade    String // M, E, P, A
+  markup   Float // Percentage
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  client Client? @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, trade])
   @@map("trade_markups")
 }
 
 model EmailTemplate {
-  id          String  @id @default(cuid())
-  name        String
-  type        EmailTemplateType
-  subject     String
-  body        String // HTML template with variables
-  
-  active      Boolean @default(true)
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id      String            @id @default(cuid())
+  name    String
+  type    EmailTemplateType
+  subject String
+  body    String // HTML template with variables
+
+  active Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("email_templates")
 }
@@ -614,59 +686,57 @@ enum EmailTemplateType {
 // ============================================================================
 
 model PlanPage {
-  id          String @id @default(cuid())
-  projectId   String
-  pageNumber  Int
-  fileName    String
-  pdfUrl      String // S3/Storage URL to PDF
-  thumbnail   String? // S3 URL to page thumbnail
-  
+  id         String  @id @default(cuid())
+  projectId  String
+  pageNumber Int
+  fileName   String
+  pdfUrl     String // S3/Storage URL to PDF
+  thumbnail  String? // S3 URL to page thumbnail
+
   // Metadata
-  sheetName   String? // "A1.1 - Floor Plan"
-  scale       String? // "1/4\" = 1'-0\""
-  discipline  String? // A, P, M, E
-  
+  sheetName  String? // "A1.1 - Floor Plan"
+  scale      String? // "1/4\" = 1'-0\""
+  discipline String? // A, P, M, E
+
   // Extracted from takeoff (denormalized for performance)
   materialsOnPage Json[] // Array of material IDs and summaries
-  featuresOnPage  Int @default(0) // Count of features on this page
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  locations   FeatureLocation[]
-  
+  featuresOnPage  Int    @default(0) // Count of features on this page
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project   Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  locations FeatureLocation[]
+
   @@unique([projectId, pageNumber])
   @@map("plan_pages")
 }
 
 model FeatureLocation {
-  id          String @id @default(cuid())
-  projectId   String
-  planPageId  String
-  featureId   String // Reference to takeoff Feature (read-only)
-  
+  id         String @id @default(cuid())
+  projectId  String
+  planPageId String
+  featureId  String // Reference to takeoff Feature (read-only)
+
   // Geometry on PDF (percentage-based for responsive display)
   // Coordinates are 0-1 scale (0.25 = 25% from left/top)
-  coordinates Json // { x, y, width, height } or { points: [[x,y], [x,y], ...] }
+  coordinates  Json // { x, y, width, height } or { points: [[x,y], [x,y], ...] }
   geometryType String // 'rectangle', 'polygon', 'line', 'point'
-  
+
   // Links
-  materialId  String? // Links to Material in materials DB
-  bomItemId   String? // Links to BOM item
-  
+  materialId String? // Links to Material in materials DB
+  bomItemId  String? // Links to BOM item
+
   // Visual properties
-  color       String? // Hex color for highlighting
-  label       String? // Display label on hover
-  trade       String? // M, E, P, A
-  
-  createdAt   DateTime @default(now())
-  
-  planPage    PlanPage @relation(fields: [planPageId], references: [id], onDelete: Cascade)
-  
+  color String? // Hex color for highlighting
+  label String? // Display label on hover
+  trade String? // M, E, P, A
+
+  createdAt DateTime @default(now())
+
+  planPage PlanPage @relation(fields: [planPageId], references: [id], onDelete: Cascade)
+
   @@index([projectId, planPageId])
   @@index([materialId])
   @@map("feature_locations")
 }
-
-
