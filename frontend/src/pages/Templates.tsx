@@ -4,13 +4,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Mail, Plus, Edit2, Loader2, FileText, Award, XCircle } from 'lucide-react';
+import { Mail, Plus, Edit2, Loader2, FileText, Award, XCircle, Bold, Italic, List, Heading } from 'lucide-react';
 import axios from 'axios';
-import ReactQuill from 'react-quill';
-import 'react-quill/dist/quill.snow.css';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -255,38 +254,103 @@ export default function Templates() {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="templateBody">Email Body (WYSIWYG Editor)</Label>
+                <Label htmlFor="templateBody">Email Body</Label>
                 <p className="text-xs text-muted-foreground mb-2">
-                  Type your email like a Word document. Insert variables by typing them: {"{{projectName}}"}, {"{{vendorName}}"}, etc.
+                  Use the formatting buttons below or type HTML directly. Press Enter twice for line breaks.
                 </p>
-                <div className="border rounded-md bg-white">
-                  <ReactQuill
-                    theme="snow"
-                    value={templateForm.body}
-                    onChange={(value) => setTemplateForm({ ...templateForm, body: value })}
-                    modules={{
-                      toolbar: [
-                        [{ 'header': [1, 2, 3, false] }],
-                        ['bold', 'italic', 'underline', 'strike'],
-                        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                        [{ 'color': [] }, { 'background': [] }],
-                        [{ 'align': [] }],
-                        ['link'],
-                        ['clean']
-                      ],
+                <div className="flex gap-1 mb-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      const textarea = document.getElementById('templateBody') as HTMLTextAreaElement;
+                      const start = textarea.selectionStart;
+                      const end = textarea.selectionEnd;
+                      const selectedText = templateForm.body.substring(start, end) || 'text';
+                      const newText = templateForm.body.substring(0, start) + `<strong>${selectedText}</strong>` + templateForm.body.substring(end);
+                      setTemplateForm({ ...templateForm, body: newText });
                     }}
-                    formats={[
-                      'header',
-                      'bold', 'italic', 'underline', 'strike',
-                      'list', 'bullet',
-                      'color', 'background',
-                      'align',
-                      'link'
-                    ]}
-                    style={{ minHeight: '300px' }}
-                    placeholder="Start typing your email template here..."
-                  />
+                    title="Bold"
+                  >
+                    <Bold className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      const textarea = document.getElementById('templateBody') as HTMLTextAreaElement;
+                      const start = textarea.selectionStart;
+                      const end = textarea.selectionEnd;
+                      const selectedText = templateForm.body.substring(start, end) || 'text';
+                      const newText = templateForm.body.substring(0, start) + `<em>${selectedText}</em>` + templateForm.body.substring(end);
+                      setTemplateForm({ ...templateForm, body: newText });
+                    }}
+                    title="Italic"
+                  >
+                    <Italic className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setTemplateForm({ ...templateForm, body: templateForm.body + '\n<p>&nbsp;</p>\n<h3>Heading</h3>\n' });
+                    }}
+                    title="Heading"
+                  >
+                    <Heading className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setTemplateForm({ ...templateForm, body: templateForm.body + '\n<ul>\n  <li>Item 1</li>\n  <li>Item 2</li>\n</ul>\n' });
+                    }}
+                    title="Bullet List"
+                  >
+                    <List className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setTemplateForm({ ...templateForm, body: templateForm.body + '<p>&nbsp;</p>\n<p>&nbsp;</p>\n' });
+                    }}
+                    title="Add Line Breaks"
+                  >
+                    ↵ Space
+                  </Button>
                 </div>
+                <Textarea
+                  id="templateBody"
+                  value={templateForm.body}
+                  onChange={(e) => setTemplateForm({ ...templateForm, body: e.target.value })}
+                  rows={16}
+                  placeholder="<p>Dear {{vendorName}},</p>
+
+<p>We are requesting your proposal for installation services:</p>
+
+<p><strong>Project:</strong> {{projectName}}<br/>
+<strong>Location:</strong> {{projectLocation}}<br/>
+<strong>Due Date:</strong> {{dueDate}}</p>
+
+<p><strong>Scope of Work:</strong></p>
+<ul>
+  <li>Furnish all labor, equipment, supervision</li>
+  <li>Install materials per specifications</li>
+  <li>Coordinate with other trades</li>
+</ul>
+
+<p><strong>Materials to Install:</strong></p>
+{{materialsTable}}
+
+<p>Best regards,<br/>GC Legacy Construction</p>"
+                  className="font-mono text-sm"
+                />
                 <div className="border rounded-md p-4 bg-gray-50 max-h-80 overflow-auto mt-2">
                   <p className="text-xs font-semibold mb-3 text-gray-600">Live Preview:</p>
                   <div 
