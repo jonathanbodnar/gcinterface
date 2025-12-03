@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '@/common/prisma/prisma.service';
+import { PrismaService, TakeoffPrismaService } from '@/common/prisma/prisma.service';
 import { MaterialsService } from '../materials/materials.service';
-import { TakeoffApiService } from '../takeoff/takeoff-api.service';
 
 interface TakeoffFeature {
   type: string;
@@ -18,7 +17,7 @@ interface TakeoffFeature {
 export class BOMGeneratorService {
   constructor(
     private prisma: PrismaService,
-    private takeoffApi: TakeoffApiService,
+    private takeoffPrisma: TakeoffPrismaService,
     private materialsService: MaterialsService,
   ) {}
 
