@@ -130,9 +130,12 @@ export default function RFQManagement() {
 
   const downloadPDF = async (rfqId: string, rfqNumber: string) => {
     try {
+      console.log('Downloading PDF for RFQ:', rfqId);
       const response = await axios.get(`${API_URL}/rfq/${rfqId}/pdf`, {
         responseType: 'blob', // Important: tells axios to expect binary data
       });
+      
+      console.log('PDF response received:', response.headers['content-type']);
       
       // Create a blob URL and trigger download
       const blob = new Blob([response.data], { type: 'application/pdf' });
@@ -144,9 +147,19 @@ export default function RFQManagement() {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-    } catch (error) {
+      
+      console.log('PDF download completed successfully');
+    } catch (error: any) {
       console.error('Failed to download PDF:', error);
-      alert('Failed to download PDF');
+      console.error('Error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+      });
+      
+      // Show more detailed error
+      const errorMsg = error.response?.data?.message || error.message || 'Unknown error';
+      alert(`Failed to download PDF: ${errorMsg}`);
     }
   };
 
