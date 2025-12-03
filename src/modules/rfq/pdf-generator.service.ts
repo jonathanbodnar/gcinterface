@@ -1,7 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '@/common/prisma/prisma.service';
-// @ts-ignore - pdfkit has TS issues, but works fine at runtime
-import PDFDocument from 'pdfkit';
+const PDFDocument = require('pdfkit');
 
 @Injectable()
 export class PDFGeneratorService {
@@ -38,7 +37,8 @@ export class PDFGeneratorService {
 
     return new Promise((resolve, reject) => {
       try {
-        const doc = new (PDFDocument as any)({ size: 'LETTER', margin: 50 });
+        this.logger.log('Creating PDF document...');
+        const doc = new PDFDocument({ size: 'LETTER', margin: 50 });
         const chunks: Buffer[] = [];
 
         doc.on('data', (chunk: Buffer) => chunks.push(chunk));
