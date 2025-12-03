@@ -21,11 +21,16 @@ export default function VendorProfile() {
   const [catalog, setCatalog] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [priceDialog, setPriceDialog] = useState(false);
+  const [addMaterialDialog, setAddMaterialDialog] = useState(false);
   const [selectedMaterial, setSelectedMaterial] = useState<any>(null);
   const [priceForm, setPriceForm] = useState({ unitCost: '', leadTimeDays: '', minimumOrder: '' });
+  const [allMaterials, setAllMaterials] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [newMaterialForm, setNewMaterialForm] = useState({ materialId: '', unitCost: '', uom: '' });
 
   useEffect(() => {
     loadVendorData();
+    loadAllMaterials();
   }, [id]);
 
   const loadVendorData = async () => {
@@ -40,6 +45,50 @@ export default function VendorProfile() {
       setCatalog(catalogResponse.data.catalog || []);
     } catch (error) {
       console.error('Failed to load vendor:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadAllMaterials = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/materials`);
+      setAllMaterials(response.data);
+    } catch (error) {
+      console.error('Failed to load materials:', error);
+    }
+  };
+
+  const openAddMaterialDialog = () => {
+    setNewMaterialForm({ materialId: '', unitCost: '', uom: '' });
+    setSearchQuery('');
+    setAddMaterialDialog(true);
+  };
+
+  const saveNewMaterial = async () => {
+    if (!newMaterialForm.materialId || !newMaterialForm.unitCost) {
+      alert('Please select a material and enter a price');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const selectedMat = allMaterials.find(m => m.id === newMaterialForm.materialId);
+      
+      await axios.post(
+        `${API_URL}/pricing/vendors/${id}/materials/${newMaterialForm.materialId}`,
+        {
+          unitCost: parseFloat(newMaterialForm.unitCost),
+          uom: newMaterialForm.uom || selectedMat?.uom || 'EA',
+        }
+      );
+      
+      alert('Material added to catalog!');
+      setAddMaterialDialog(false);
+      loadVendorData();
+    } catch (error) {
+      console.error('Failed to add material:', error);
+      alert('Failed to add material');
     } finally {
       setLoading(false);
     }
@@ -263,7 +312,7 @@ export default function VendorProfile() {
                         />
                       </label>
                     </Button>
-                    <Button>
+                    <Button onClick={openAddMaterialDialog}>
                       <Plus className="w-4 h-4 mr-2" />
                       Add Material
                     </Button>
@@ -478,6 +527,107 @@ export default function VendorProfile() {
               <Button onClick={savePrice} disabled={loading || !priceForm.unitCost}>
                 {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
                 Save Price
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Add Material Dialog */}
+        <Dialog open={addMaterialDialog} onOpenChange={setAddMaterialDialog}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Add Material to Catalog</DialogTitle>
+              <DialogDescription>
+                Select a material from the database and set pricing
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="grid gap-2">
+                <Label htmlFor="materialSearch">Search Materials</Label>
+                <Input
+                  id="materialSearch"
+                  placeholder="Type to search materials..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+              <div className="border rounded-md max-h-64 overflow-y-auto">
+                {allMaterials
+                  .filter(m => 
+                    !searchQuery || 
+                    m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                    m.category?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                    m.trade?.toLowerCase().includes(searchQuery.toLowerCase())
+                  )
+                  .slice(0, 20)
+                  .map((material) => (
+                    <div
+                      key={material.id}
+                      className={`p-3 hover:bg-muted cursor-pointer border-b last:border-b-0 ${
+                        newMaterialForm.materialId === material.id ? 'bg-primary/10 border-primary' : ''
+                      }`}
+                      onClick={() => {
+                        setNewMaterialForm({ 
+                          ...newMaterialForm, 
+                          materialId: material.id,
+                          uom: material.uom || 'EA'
+                        });
+                      }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="font-medium">{material.name}</div>
+                          <div className="text-sm text-muted-foreground">
+                            <Badge variant="outline" className="mr-2">{material.trade}</Badge>
+                            {material.category}
+                          </div>
+                        </div>
+                        {newMaterialForm.materialId === material.id && (
+                          <div className="w-2 h-2 rounded-full bg-primary"></div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                {allMaterials.filter(m => 
+                  !searchQuery || 
+                  m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                  m.category?.toLowerCase().includes(searchQuery.toLowerCase())
+                ).length === 0 && (
+                  <div className="p-4 text-center text-muted-foreground">
+                    No materials found
+                  </div>
+                )}
+              </div>
+              {newMaterialForm.materialId && (
+                <>
+                  <div className="grid gap-2">
+                    <Label htmlFor="newUnitCost">Unit Cost ($)</Label>
+                    <Input
+                      id="newUnitCost"
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={newMaterialForm.unitCost}
+                      onChange={(e) => setNewMaterialForm({ ...newMaterialForm, unitCost: e.target.value })}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="newUom">Unit of Measure</Label>
+                    <Input
+                      id="newUom"
+                      placeholder="EA, SF, LF, etc."
+                      value={newMaterialForm.uom}
+                      onChange={(e) => setNewMaterialForm({ ...newMaterialForm, uom: e.target.value })}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setAddMaterialDialog(false)}>Cancel</Button>
+              <Button onClick={saveNewMaterial} disabled={loading || !newMaterialForm.materialId || !newMaterialForm.unitCost}>
+                {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                Add to Catalog
               </Button>
             </DialogFooter>
           </DialogContent>
