@@ -121,6 +121,7 @@ export default function Templates() {
   const [editingTemplate, setEditingTemplate] = useState<any>(null);
   const [templateForm, setTemplateForm] = useState({
     type: 'RFQ',
+    name: '',
     subject: '',
     body: '',
   });
@@ -166,6 +167,7 @@ export default function Templates() {
       setEditingTemplate(template);
       setTemplateForm({
         type: template.type || 'RFQ',
+        name: template.name || '',
         subject: template.subject || '',
         body: template.body || '',
       });
@@ -173,6 +175,7 @@ export default function Templates() {
       setEditingTemplate(null);
       setTemplateForm({
         type: 'RFQ',
+        name: '',
         subject: '',
         body: '',
       });
@@ -185,6 +188,7 @@ export default function Templates() {
     try {
       const data = {
         type: templateForm.type,
+        name: templateForm.name,
         subject: templateForm.subject,
         body: templateForm.body,
         active: true,
@@ -307,6 +311,7 @@ export default function Templates() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Type</TableHead>
+                  <TableHead>Name</TableHead>
                   <TableHead>Subject</TableHead>
                   <TableHead>Preview</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -315,7 +320,7 @@ export default function Templates() {
               <TableBody>
                 {emailTemplates.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                       No email templates configured. Click "Add Template" to create one.
                     </TableCell>
                   </TableRow>
@@ -327,6 +332,15 @@ export default function Templates() {
                           {getTemplateIcon(template.type)}
                           {template.type}
                         </Badge>
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        {template.name || <span className="text-muted-foreground italic">Unnamed</span>}
+                        {template.name && (template.name.includes('Subcontractor') || template.name.includes('Labor')) && (
+                          <Badge variant="outline" className="ml-2 text-xs">For Subs</Badge>
+                        )}
+                        {template.name && (template.name.includes('Supplier') || template.name.includes('Material')) && (
+                          <Badge variant="outline" className="ml-2 text-xs">For Suppliers</Badge>
+                        )}
                       </TableCell>
                       <TableCell className="font-medium">{template.subject}</TableCell>
                       <TableCell className="text-muted-foreground text-sm max-w-md truncate">
@@ -367,6 +381,18 @@ export default function Templates() {
                   <option value="AWARD">Award - Congratulations Email</option>
                   <option value="NON_AWARD">Non-Award - Thank You Email</option>
                 </select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="templateName">Template Name (Required)</Label>
+                <Input
+                  id="templateName"
+                  value={templateForm.name}
+                  onChange={(e) => setTemplateForm({ ...templateForm, name: e.target.value })}
+                  placeholder="e.g., 'RFQ - Material Suppliers' or 'RFQ - Subcontractors'"
+                />
+                <p className="text-xs text-muted-foreground">
+                  💡 Include "Supplier" or "Subcontractor" in the name to identify the template type
+                </p>
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="templateSubject">Subject Line</Label>
