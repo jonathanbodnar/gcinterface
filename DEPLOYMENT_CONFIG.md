@@ -58,7 +58,7 @@
 | Variable | Value | Purpose |
 |----------|-------|---------|
 | `DATABASE_URL` | `postgresql://postgres:juuYZdLSolxwRSVmDkINLZskUwMqRSMO@gondola.proxy.rlwy.net:55584/railway` | Interface's own database (projects, vendors, quotes) |
-| `TAKEOFF_API_URL` | `https://165.22.162.176.sslip.io/v1` | **NEW** - Connects to takeoff API for job data |
+| `TAKEOFF_DATABASE_URL` | `postgresql://plantakeoff:password@165.22.162.176:5432/plantakeoff` | Direct connection to takeoff database (READ ONLY) |
 | `JWT_SECRET` | `your-secret-key` | JWT authentication |
 | `JWT_EXPIRES_IN` | `7d` | Token expiration |
 | `PORT` | `3001` | Backend port |
@@ -67,7 +67,7 @@
 
 **How it's used:**
 - `DATABASE_URL`: Interface's own data (READ/WRITE)
-- `TAKEOFF_API_URL`: Fetches completed takeoff jobs (READ ONLY via HTTP)
+- `TAKEOFF_DATABASE_URL`: Direct database connection to read completed takeoff jobs (READ ONLY)
 
 ---
 
@@ -76,17 +76,22 @@
 ### **When user imports a takeoff job:**
 
 1. **Frontend** calls: `GET /api/projects/available-takeoff-jobs`
-2. **Interface Backend** calls: `GET https://165.22.162.176.sslip.io/v1/jobs`
-3. **Takeoff API** returns: List of completed jobs
-4. **Interface Backend** marks which are already imported
-5. **Frontend** displays: Available takeoffs with "Import" button
+2. **Interface Backend** queries takeoff database:
+   ```sql
+   SELECT j.id, f.filename, j.status, j.createdAt
+   FROM jobs j LEFT JOIN files f ON j.fileId = f.id
+   ORDER BY j.createdAt DESC
+   ```
+3. **Interface Backend** marks which are already imported
+4. **Frontend** displays: Available takeoffs with "Import" button
 
 ### **When user clicks "Import":**
 
 1. **Frontend** calls: `POST /api/projects/import`
-2. **Interface Backend** calls:
-   - `GET https://165.22.162.176.sslip.io/v1/jobs/{id}` - Get job details
-   - `GET https://165.22.162.176.sslip.io/v1/jobs/{id}/features` - Get measurements
+2. **Interface Backend** queries takeoff database:
+   - Get job details from `jobs` and `files` tables
+   - Get room features from `Feature` table (type = 'ROOM')
+   - Calculate total square footage
 3. **Interface Backend** creates:
    - New project in interface database
    - Auto-generates BOM from features
@@ -115,7 +120,7 @@ The interface backend expects these endpoints from the takeoff API:
 ## ✅ Deployment Checklist
 
 ### **Step 1: Backend Environment Variables**
-- [ ] Set `TAKEOFF_API_URL=https://165.22.162.176.sslip.io/v1` in Railway
+- [ ] Set `TAKEOFF_DATABASE_URL=postgresql://plantakeoff:password@165.22.162.176:5432/plantakeoff` in Railway
 - [ ] Verify `DATABASE_URL` is correct (should be auto-set by Railway)
 - [ ] Keep other existing env vars (`JWT_SECRET`, etc.)
 
@@ -124,9 +129,9 @@ The interface backend expects these endpoints from the takeoff API:
 - [ ] Trigger frontend rebuild to pick up new env var
 
 ### **Step 3: Test Connection**
-- [ ] Check backend logs for: `✅ Takeoff API client initialized`
+- [ ] Check backend logs for: `✅ Takeoff database connected (READ ONLY)`
 - [ ] Go to `/projects` → "Available Takeoffs" tab
-- [ ] Should see list of jobs from takeoff API
+- [ ] Should see list of jobs from takeoff database
 - [ ] Try importing a job
 
 ### **Step 4: Verify Data Flow**
@@ -139,27 +144,23 @@ The interface backend expects these endpoints from the takeoff API:
 
 ## 🐛 Troubleshooting
 
-### **"Takeoff API not configured"**
-**Problem:** `TAKEOFF_API_URL` not set or incorrect
+### **"Takeoff database not configured"**
+**Problem:** `TAKEOFF_DATABASE_URL` not set or incorrect
 
 **Solution:**
 ```bash
 # In Railway backend service environment variables
-TAKEOFF_API_URL=https://165.22.162.176.sslip.io/v1
+TAKEOFF_DATABASE_URL=postgresql://plantakeoff:password@165.22.162.176:5432/plantakeoff
 ```
 
 ### **"Failed to fetch takeoff jobs"**
-**Problem:** API endpoint doesn't exist or returns different format
+**Problem:** Database connection issue or tables don't exist
 
 **Check:**
-1. Is takeoff API running at `165.22.162.176.sslip.io`?
-2. Does `/v1/jobs` endpoint exist?
+1. Is the database accessible from Railway backend?
+2. Do the `jobs`, `files`, and `Feature` tables exist?
 3. Check backend logs for specific error message
-
-**The TakeoffApiService will automatically try alternate endpoints:**
-- `/jobs` → `/takeoff/jobs`
-- `/jobs/:id` → `/takeoff/:id`
-- `/jobs/:id/features` → `/materials/:jobId`
+4. Verify database credentials are correct
 
 ### **"No jobs showing in Available Takeoffs"**
 **Problem:** No data or API connection issue
@@ -188,12 +189,12 @@ TAKEOFF_API_URL=https://165.22.162.176.sslip.io/v1
 curl https://gcinterface-development.up.railway.app/api/health
 ```
 
-### **Takeoff API Connection Test**
-The backend automatically attempts to connect to the takeoff API on startup.
+### **Takeoff Database Connection Test**
+The backend automatically attempts to connect to the takeoff database on startup.
 
 **Look for these log messages:**
 ```
-✅ Takeoff API client initialized: https://165.22.162.176.sslip.io/v1
+✅ Takeoff database connected (READ ONLY)
 ✅ GC Interface database connected
 ```
 
@@ -217,21 +218,16 @@ curl https://gcinterface-development.up.railway.app/api/projects/available-takeo
 
 ## 🎯 Summary
 
-**What changed:**
-- ❌ Removed: Direct database connection to takeoff database
-- ✅ Added: HTTP API client for takeoff data
-- ✅ Added: Smart endpoint detection with fallbacks
-- ✅ Added: Better error handling and logging
-
 **What to set:**
-1. Backend: `TAKEOFF_API_URL=https://165.22.162.176.sslip.io/v1`
+1. Backend: `TAKEOFF_DATABASE_URL=postgresql://plantakeoff:password@165.22.162.176:5432/plantakeoff`
 2. Frontend: `VITE_API_URL=https://gcinterface-development.up.railway.app/api`
 
 **Result:**
-- Clean architecture with API boundaries
+- Direct database connection for reliable data access
 - Interface imports completed takeoff jobs
 - Auto-generates BOM from measurements
 - Ready for vendor matching, quotes, RFQs
+- READ ONLY access to takeoff database
 
 🚀 **System is ready to deploy!**
 
