@@ -5,6 +5,8 @@ export interface LaborBreakdown {
   trade: string;
   laborHours: number;
   laborCost: number;
+  materialCost: number;
+  totalCost: number;
   items: Array<{
     bomItemId: string;
     description: string;
@@ -41,9 +43,15 @@ export class LaborCalculationService {
           trade,
           laborHours: 0,
           laborCost: 0,
+          materialCost: 0,
+          totalCost: 0,
           items: [],
         };
       }
+
+      // Calculate material cost for this item
+      const materialCost = bomItem.finalQty * (bomItem.unitCost || 0);
+      breakdown[trade].materialCost += materialCost;
 
       // Get labor rule for this material
       const laborRule = await this.getLaborRule(bomItem);
@@ -82,19 +90,26 @@ export class LaborCalculationService {
     // Calculate totals with markups
     let totalLaborHours = 0;
     let totalLaborCost = 0;
+    let totalMaterialCost = 0;
     let totalWithMarkup = 0;
 
     for (const trade in breakdown) {
       const markup = markupMap[trade] || 0;
       const markedUpCost = breakdown[trade].laborCost * (1 + markup / 100);
       
+      // Calculate total cost per trade (labor + materials)
+      breakdown[trade].totalCost = breakdown[trade].laborCost + breakdown[trade].materialCost;
+      
       totalLaborHours += breakdown[trade].laborHours;
       totalLaborCost += breakdown[trade].laborCost;
+      totalMaterialCost += breakdown[trade].materialCost;
       totalWithMarkup += markedUpCost;
 
       breakdown[trade]['markup'] = markup;
       breakdown[trade]['costWithMarkup'] = markedUpCost;
     }
+
+    const grandTotal = totalLaborCost + totalMaterialCost;
 
     return {
       totalLaborHours,
@@ -102,7 +117,11 @@ export class LaborCalculationService {
       totalWithMarkup,
       breakdown: Object.values(breakdown),
       summary: {
-        averageRate: totalLaborCost / totalLaborHours,
+        totalLaborHours,
+        totalLaborCost,
+        totalMaterialCost,
+        grandTotal,
+        averageRate: totalLaborCost / totalLaborHours || 0,
         totalMarkup: totalWithMarkup - totalLaborCost,
       },
     };
