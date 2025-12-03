@@ -3,6 +3,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import * as bodyParser from 'body-parser';
+import * as multer from 'multer';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -32,6 +33,10 @@ async function bootstrap() {
   // Parse URL-encoded bodies (SendGrid webhook format)
   app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
   app.use(bodyParser.json({ limit: '50mb' }));
+  
+  // Parse multipart/form-data (SendGrid sends this format)
+  const upload = multer();
+  app.use('/api/webhooks/sendgrid-inbound', upload.any());
 
   // Swagger documentation
   const config = new DocumentBuilder()
