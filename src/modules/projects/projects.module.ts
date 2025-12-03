@@ -3,10 +3,9 @@ import { ProjectsService } from './projects.service';
 import { ProjectsController } from './projects.controller';
 import { PrismaModule } from '@/common/prisma/prisma.module';
 import { BOMModule } from '../bom/bom.module';
-import { TakeoffModule } from '../takeoff/takeoff.module';
 
 @Module({
-  imports: [PrismaModule, BOMModule, TakeoffModule],
+  imports: [PrismaModule, BOMModule],
   controllers: [ProjectsController],
   providers: [ProjectsService],
   exports: [ProjectsService],

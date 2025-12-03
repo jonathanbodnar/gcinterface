@@ -42,17 +42,29 @@ export class BOMGeneratorService {
 
     const bomItems = [];
 
-    // Fetch features from takeoff API
-    if (this.takeoffApi.isAvailable()) {
+    // Fetch features from takeoff database
+    if (this.takeoffPrisma.client) {
       try {
         // Get rooms for flooring, paint, ceiling calculations
-        const rooms = await this.takeoffApi.getRooms(project.takeoffJobId);
+        const rooms: any[] = await this.takeoffPrisma.$queryRaw`
+          SELECT * FROM "Feature" 
+          WHERE "jobId" = ${project.takeoffJobId} 
+          AND type = 'ROOM'
+        `;
 
         // Get pipes for plumbing calculations
-        const pipes = await this.takeoffApi.getPipes(project.takeoffJobId);
+        const pipes: any[] = await this.takeoffPrisma.$queryRaw`
+          SELECT * FROM "Feature"
+          WHERE "jobId" = ${project.takeoffJobId}
+          AND type = 'PIPE'
+        `;
 
         // Get fixtures
-        const fixtures = await this.takeoffApi.getFixtures(project.takeoffJobId);
+        const fixtures: any[] = await this.takeoffPrisma.$queryRaw`
+          SELECT * FROM "Feature"
+          WHERE "jobId" = ${project.takeoffJobId}
+          AND type IN ('FIXTURE', 'EQUIPMENT')
+        `;
 
         // Generate BOM items from rooms
         for (const room of rooms) {
