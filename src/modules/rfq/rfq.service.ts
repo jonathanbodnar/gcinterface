@@ -222,7 +222,10 @@ export class RFQService {
 
   private generateRFQEmail(rfq: any, template: any): string {
     // Generate structured RFQ email
-    let html = template?.body || this.getDefaultRFQTemplate();
+    let bodyContent = template?.body || this.getDefaultRFQTemplate();
+
+    // Determine trade for subcontractor context
+    const trade = rfq.items[0]?.bomItem?.trade || 'General';
 
     // Replace ALL template variables (use global replace with regex)
     const replacements = {
@@ -241,12 +244,91 @@ export class RFQService {
       '{{contactPhone}}': this.configService.get('CONTACT_PHONE') || '(555) 555-5555',
       '{{MATERIALS_TABLE}}': this.generateMaterialsTable(rfq.items),
       '{{materialsTable}}': this.generateMaterialsTable(rfq.items),
+      '{{trade}}': trade,
+      '{{TRADE}}': trade,
     };
 
     // Replace all variables
     Object.entries(replacements).forEach(([key, value]) => {
-      html = html.replace(new RegExp(key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), value);
+      bodyContent = bodyContent.replace(new RegExp(key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), value);
     });
+
+    // Wrap in proper HTML email structure with CSS
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f9fafb;
+          }
+          .email-content {
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+          }
+          p {
+            margin: 1em 0;
+          }
+          h1, h2, h3, h4, h5, h6 {
+            margin-top: 1.5em;
+            margin-bottom: 0.5em;
+            font-weight: 600;
+          }
+          h1 { font-size: 2em; }
+          h2 { font-size: 1.5em; }
+          h3 { font-size: 1.17em; }
+          ul, ol {
+            margin: 1em 0;
+            padding-left: 2em;
+          }
+          li {
+            margin: 0.5em 0;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5em 0;
+          }
+          th, td {
+            border: 1px solid #e5e7eb;
+            padding: 12px;
+            text-align: left;
+          }
+          th {
+            background-color: #f3f4f6;
+            font-weight: 600;
+          }
+          tr:nth-child(even) {
+            background-color: #f9fafb;
+          }
+          strong {
+            font-weight: 600;
+          }
+          em {
+            font-style: italic;
+          }
+          u {
+            text-decoration: underline;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="email-content">
+          ${bodyContent}
+        </div>
+      </body>
+      </html>
+    `;
 
     return html;
   }
