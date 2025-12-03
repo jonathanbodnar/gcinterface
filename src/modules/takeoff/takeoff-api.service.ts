@@ -69,11 +69,11 @@ export class TakeoffApiService {
       // Try common endpoint patterns
       let response;
       try {
-        response = await this.client.get('/jobs');
+        response = await this.client.get('/v1/jobs');
       } catch (error) {
-        // If /jobs doesn't work, try /takeoff/jobs
-        this.logger.log('Trying alternate endpoint: /takeoff/jobs');
-        response = await this.client.get('/takeoff/jobs');
+        // If /v1/jobs doesn't work, try /v1/takeoff
+        this.logger.log('Trying alternate endpoint: /v1/takeoff');
+        response = await this.client.get('/v1/takeoff');
       }
 
       const jobs = Array.isArray(response.data) ? response.data : response.data.jobs || [];
@@ -99,11 +99,11 @@ export class TakeoffApiService {
       
       let response;
       try {
-        response = await this.client.get(`/jobs/${jobId}`);
+        response = await this.client.get(`/v1/jobs/${jobId}`);
       } catch (error) {
         // Try alternate endpoint
-        this.logger.log('Trying alternate endpoint: /takeoff/:id');
-        response = await this.client.get(`/takeoff/${jobId}`);
+        this.logger.log('Trying alternate endpoint: /v1/takeoff/:id');
+        response = await this.client.get(`/v1/takeoff/${jobId}`);
       }
 
       return response.data;
@@ -127,15 +127,19 @@ export class TakeoffApiService {
       // Try common endpoint patterns
       let response;
       try {
-        response = await this.client.get(`/jobs/${jobId}/features`);
+        response = await this.client.get(`/v1/takeoff/${jobId}`);
+        // Extract features from job response
+        const features = response.data.features || [];
+        return features;
       } catch (error) {
         try {
-          // Try /takeoff/:id/features
-          response = await this.client.get(`/takeoff/${jobId}/features`);
+          // Try /v1/materials/:jobId (legacy)
+          this.logger.log('Trying legacy endpoint: /v1/materials/:jobId');
+          response = await this.client.get(`/v1/materials/${jobId}`);
         } catch (error2) {
-          // Try /materials/:jobId (legacy)
-          this.logger.log('Trying legacy endpoint: /materials/:jobId');
-          response = await this.client.get(`/materials/${jobId}`);
+          // Try /v1/jobs/:id/features
+          this.logger.log('Trying alternate endpoint: /v1/jobs/:id/features');
+          response = await this.client.get(`/v1/jobs/${jobId}/features`);
         }
       }
 
@@ -189,8 +193,8 @@ export class TakeoffApiService {
     }
 
     try {
-      // Try to hit the root or health endpoint
-      await this.client.get('/health').catch(() => this.client!.get('/'));
+      // Try to hit the health endpoint or root
+      const response = await this.client.get('/health').catch(() => this.client!.get('/'));
       return { status: 'ok', message: 'Takeoff API is reachable' };
     } catch (error) {
       return { status: 'error', message: error.message };
