@@ -1,26 +1,27 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '@/common/prisma/prisma.service';
-import * as nodemailer from 'nodemailer';
 import { ConfigService } from '@nestjs/config';
+import * as sgMail from '@sendgrid/mail';
 
 @Injectable()
 export class RFQService {
-  private transporter: nodemailer.Transporter;
+  private readonly logger = new Logger(RFQService.name);
+  private readonly sendgridConfigured: boolean;
 
   constructor(
     private prisma: PrismaService,
     private configService: ConfigService,
   ) {
-    // Initialize email transporter
-    this.transporter = nodemailer.createTransport({
-      host: this.configService.get('SMTP_HOST'),
-      port: parseInt(this.configService.get('SMTP_PORT', '587')),
-      secure: this.configService.get('SMTP_SECURE') === 'true',
-      auth: {
-        user: this.configService.get('SMTP_USER'),
-        pass: this.configService.get('SMTP_PASSWORD'),
-      },
-    });
+    // Initialize SendGrid
+    const apiKey = this.configService.get('SENDGRID_API_KEY');
+    if (apiKey) {
+      sgMail.setApiKey(apiKey);
+      this.sendgridConfigured = true;
+      this.logger.log('✅ SendGrid configured for email sending');
+    } else {
+      this.sendgridConfigured = false;
+      this.logger.warn('⚠️ SENDGRID_API_KEY not set - email sending disabled');
+    }
   }
 
   async listByProject(projectId: string) {
@@ -115,6 +116,10 @@ export class RFQService {
   }
 
   async sendRFQ(rfqId: string) {
+    if (!this.sendgridConfigured) {
+      throw new Error('Email service not configured. Please set SENDGRID_API_KEY environment variable.');
+    }
+
     const rfq = await this.prisma.rFQ.findUnique({
       where: { id: rfqId },
       include: {
@@ -127,6 +132,14 @@ export class RFQService {
         },
       },
     });
+
+    if (!rfq) {
+      throw new Error('RFQ not found');
+    }
+
+    if (!rfq.vendor.email) {
+      throw new Error(`Vendor ${rfq.vendor.name} does not have an email address`);
+    }
 
     // Get email template based on vendor type
     const isContractor = rfq.vendor.type === 'SUBCONTRACTOR' || rfq.vendor.type === 'BOTH';
@@ -153,29 +166,45 @@ export class RFQService {
     // Generate email body
     const emailBody = this.generateRFQEmail(rfq, template);
 
-    // Send email
-    const info = await this.transporter.sendMail({
-      from: this.configService.get('SMTP_FROM'),
-      to: rfq.vendor.email,
-      subject: rfq.subject,
-      html: emailBody,
-    });
+    // Send email via SendGrid
+    const fromEmail = this.configService.get('SENDGRID_FROM_EMAIL') || 'noreply@gclegacy.com';
+    const fromName = this.configService.get('SENDGRID_FROM_NAME') || 'GC Legacy Construction';
 
-    // Update RFQ status
-    await this.prisma.rFQ.update({
-      where: { id: rfqId },
-      data: {
-        status: 'SENT',
-        sentAt: new Date(),
-      },
-    });
+    try {
+      const msg = {
+        to: rfq.vendor.email,
+        from: {
+          email: fromEmail,
+          name: fromName,
+        },
+        subject: rfq.subject,
+        html: emailBody,
+        // Add reply-to for quote responses
+        replyTo: this.configService.get('SENDGRID_REPLY_TO') || 'quotes@mail.gclegacy.com',
+      };
 
-    console.log(`📧 RFQ sent to ${rfq.vendor.name} (${rfq.vendor.email})`);
+      const response = await sgMail.send(msg);
+      this.logger.log(`📧 RFQ sent to ${rfq.vendor.name} (${rfq.vendor.email})`);
 
-    return {
-      rfq,
-      emailInfo: info,
-    };
+      // Update RFQ status
+      await this.prisma.rFQ.update({
+        where: { id: rfqId },
+        data: {
+          status: 'SENT',
+          sentAt: new Date(),
+        },
+      });
+
+      return {
+        rfq,
+        emailInfo: response,
+        success: true,
+        message: `RFQ sent successfully to ${rfq.vendor.email}`,
+      };
+    } catch (error) {
+      this.logger.error(`Failed to send RFQ: ${error.message}`, error.stack);
+      throw new Error(`Failed to send email: ${error.message}`);
+    }
   }
 
   private generateRFQEmail(rfq: any, template: any): string {
