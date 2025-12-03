@@ -148,12 +148,13 @@ export class PDFGeneratorService {
       doc.moveDown(2);
 
       // Instructions
-      if (y > 650) {
+      // Check current Y position and add page if needed
+      const currentY = doc.y;
+      if (currentY > 650) {
         doc.addPage();
-        y = 50;
       }
 
-      doc.fontSize(12).text('Instructions', y, { underline: true });
+      doc.fontSize(12).text('Instructions', { underline: true });
       doc.moveDown(0.5);
       doc.fontSize(9);
       
