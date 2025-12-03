@@ -4,12 +4,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Mail, Plus, Edit2, Loader2, FileText, Award, XCircle } from 'lucide-react';
 import axios from 'axios';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -254,84 +255,42 @@ export default function Templates() {
                 />
               </div>
               <div className="grid gap-2">
-                <div className="flex items-center justify-between mb-2">
-                  <Label htmlFor="templateBody">Email Body</Label>
-                  <div className="flex gap-1">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setTemplateForm({ ...templateForm, body: templateForm.body + '\n<strong>Bold Text</strong>' });
-                      }}
-                      title="Bold"
-                    >
-                      <strong>B</strong>
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setTemplateForm({ ...templateForm, body: templateForm.body + '\n<em>Italic Text</em>' });
-                      }}
-                      title="Italic"
-                    >
-                      <em>I</em>
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setTemplateForm({ ...templateForm, body: templateForm.body + '\n<ul>\n  <li>List item 1</li>\n  <li>List item 2</li>\n</ul>' });
-                      }}
-                      title="Bullet List"
-                    >
-                      • List
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setTemplateForm({ ...templateForm, body: templateForm.body + '\n<h3>Heading</h3>' });
-                      }}
-                      title="Heading"
-                    >
-                      H
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setTemplateForm({ ...templateForm, body: templateForm.body + '\n<p>Paragraph text here</p>' });
-                      }}
-                      title="Paragraph"
-                    >
-                      ¶
-                    </Button>
-                  </div>
+                <Label htmlFor="templateBody">Email Body (WYSIWYG Editor)</Label>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Type your email like a Word document. Insert variables by typing them: {"{{projectName}}"}, {"{{vendorName}}"}, etc.
+                </p>
+                <div className="border rounded-md bg-white">
+                  <ReactQuill
+                    theme="snow"
+                    value={templateForm.body}
+                    onChange={(value) => setTemplateForm({ ...templateForm, body: value })}
+                    modules={{
+                      toolbar: [
+                        [{ 'header': [1, 2, 3, false] }],
+                        ['bold', 'italic', 'underline', 'strike'],
+                        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                        [{ 'color': [] }, { 'background': [] }],
+                        [{ 'align': [] }],
+                        ['link'],
+                        ['clean']
+                      ],
+                    }}
+                    formats={[
+                      'header',
+                      'bold', 'italic', 'underline', 'strike',
+                      'list', 'bullet',
+                      'color', 'background',
+                      'align',
+                      'link'
+                    ]}
+                    style={{ minHeight: '300px' }}
+                    placeholder="Start typing your email template here..."
+                  />
                 </div>
-                <Textarea
-                  id="templateBody"
-                  value={templateForm.body}
-                  onChange={(e) => setTemplateForm({ ...templateForm, body: e.target.value })}
-                  rows={12}
-                  placeholder="Use HTML tags for formatting:
-<strong>Bold</strong>, <em>Italic</em>
-<h3>Headings</h3>
-<ul><li>Bullet lists</li></ul>
-<p>Paragraphs</p>
-
-Variables: {{projectName}}, {{vendorName}}, {{materialList}}"
-                  className="font-mono text-sm"
-                />
-                <div className="border rounded-md p-4 bg-white max-h-80 overflow-auto">
+                <div className="border rounded-md p-4 bg-gray-50 max-h-80 overflow-auto mt-2">
                   <p className="text-xs font-semibold mb-3 text-gray-600">Live Preview:</p>
                   <div 
-                    className="prose prose-sm max-w-none"
+                    className="prose prose-sm max-w-none bg-white p-4 rounded"
                     dangerouslySetInnerHTML={{ __html: templateForm.body }}
                   />
                 </div>
