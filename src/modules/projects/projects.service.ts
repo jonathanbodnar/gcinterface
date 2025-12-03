@@ -54,10 +54,10 @@ export class ProjectsService {
       },
     });
 
-    // Create PlanPage record with PDF from takeoff
-    const pdfUrl = (jobData as any).storageUrl || (jobData as any).url || (jobData as any).path;
-    if (pdfUrl) {
-      try {
+    // Try to create PlanPage record with PDF from takeoff (non-blocking)
+    try {
+      const pdfUrl = (jobData as any).storageUrl || (jobData as any).url || (jobData as any).path;
+      if (pdfUrl) {
         await this.prisma.planPage.create({
           data: {
             projectId: project.id,
@@ -68,11 +68,12 @@ export class ProjectsService {
           },
         });
         console.log(`📄 Created PlanPage with PDF: ${pdfUrl}`);
-      } catch (error) {
-        console.warn('⚠️ Could not create PlanPage:', error.message);
+      } else {
+        console.log('📄 No PDF URL in takeoff files - skipping PlanPage creation');
       }
-    } else {
-      console.warn('⚠️ No PDF URL found in takeoff files table');
+    } catch (error) {
+      // Don't fail the import if PlanPage creation fails
+      console.warn('⚠️ PlanPage creation failed (non-critical):', error.message);
     }
 
     console.log(`✅ Imported takeoff job ${takeoffJobId} as project ${project.id}`);
