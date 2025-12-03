@@ -17,9 +17,8 @@ export class ProjectsService {
     }
 
     const takeoffJob = await this.takeoffPrisma.$queryRaw`
-      SELECT j.*, f.filename
+      SELECT j.*
       FROM "jobs" j
-      LEFT JOIN "files" f ON j."fileId" = f.id
       WHERE j.id = ${takeoffJobId}
     `;
 
@@ -43,9 +42,14 @@ export class ProjectsService {
     }
 
     // Create project in GC Interface database
+    // Use job name or generate a default name
+    const projectName = (jobData as any).name || 
+                        (jobData as any).filename?.replace(/\.[^/.]+$/, '') || 
+                        `Project ${takeoffJobId.substring(0, 8)}`;
+    
     const project = await this.prisma.project.create({
       data: {
-        name: jobData.filename?.replace(/\.[^/.]+$/, '') || `Project-${takeoffJobId}`,
+        name: projectName,
         location: 'To be determined',
         takeoffJobId: takeoffJobId,
         status: 'SCOPE_DIAGNOSIS',
@@ -54,10 +58,7 @@ export class ProjectsService {
       },
     });
 
-    // Note: PDF URL not available from takeoff DB files table
-    // User can manually upload PDFs or we can add file storage later
-    console.log('📄 PDF URL not available - skipping PlanPage creation');
-    console.log('💡 Tip: You can manually upload PDFs for projects later');
+    console.log(`✅ Created project: ${projectName}`);
 
     console.log(`✅ Imported takeoff job ${takeoffJobId} as project ${project.id}`);
     console.log(`📐 Total SF: ${totalSF}`);
