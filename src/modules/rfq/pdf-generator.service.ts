@@ -1,12 +1,17 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '@/common/prisma/prisma.service';
-import * as PDFDocument from 'pdfkit';
+// @ts-ignore - pdfkit has TS issues, but works fine at runtime
+import PDFDocument from 'pdfkit';
 
 @Injectable()
 export class PDFGeneratorService {
+  private readonly logger = new Logger(PDFGeneratorService.name);
+
   constructor(private prisma: PrismaService) {}
 
   async generateRFQPDF(rfqId: string): Promise<Buffer> {
+    this.logger.log(`Generating PDF for RFQ ${rfqId}`);
+    
     const rfq = await this.prisma.rFQ.findUnique({
       where: { id: rfqId },
       include: {
@@ -21,16 +26,30 @@ export class PDFGeneratorService {
     });
 
     if (!rfq) {
+      this.logger.error(`RFQ ${rfqId} not found`);
       throw new Error('RFQ not found');
     }
 
-    return new Promise((resolve, reject) => {
-      const doc = new PDFDocument({ size: 'LETTER', margin: 50 });
-      const chunks: Buffer[] = [];
+    if (!rfq.items || rfq.items.length === 0) {
+      this.logger.warn(`RFQ ${rfqId} has no items`);
+    }
 
-      doc.on('data', (chunk) => chunks.push(chunk));
-      doc.on('end', () => resolve(Buffer.concat(chunks)));
-      doc.on('error', reject);
+    this.logger.log(`Found RFQ with ${rfq.items?.length || 0} items`);
+
+    return new Promise((resolve, reject) => {
+      try {
+        const doc = new (PDFDocument as any)({ size: 'LETTER', margin: 50 });
+        const chunks: Buffer[] = [];
+
+        doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+        doc.on('end', () => {
+          this.logger.log(`PDF generated successfully for RFQ ${rfqId}`);
+          resolve(Buffer.concat(chunks));
+        });
+        doc.on('error', (error: Error) => {
+          this.logger.error(`PDF generation error: ${error.message}`, error.stack);
+          reject(error);
+        });
 
       // Header
       doc.fontSize(20).text('REQUEST FOR QUOTE', { align: 'center' });
@@ -162,6 +181,10 @@ export class PDFGeneratorService {
       doc.text('GC Legacy Construction');
 
       doc.end();
+      } catch (error) {
+        this.logger.error(`Failed to create PDF document: ${error.message}`, error.stack);
+        reject(error);
+      }
     });
   }
 }

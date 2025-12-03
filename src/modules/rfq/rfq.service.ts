@@ -211,14 +211,29 @@ export class RFQService {
     // Generate structured RFQ email
     let html = template?.body || this.getDefaultRFQTemplate();
 
-    // Replace template variables
-    html = html.replace('{{PROJECT_NAME}}', rfq.project.name);
-    html = html.replace('{{RFQ_NUMBER}}', rfq.rfqNumber);
-    html = html.replace('{{DUE_DATE}}', rfq.dueDate?.toLocaleDateString() || 'TBD');
+    // Replace ALL template variables (use global replace with regex)
+    const replacements = {
+      '{{PROJECT_NAME}}': rfq.project.name || 'N/A',
+      '{{projectName}}': rfq.project.name || 'N/A',
+      '{{RFQ_NUMBER}}': rfq.rfqNumber || 'N/A',
+      '{{rfqNumber}}': rfq.rfqNumber || 'N/A',
+      '{{DUE_DATE}}': rfq.dueDate ? new Date(rfq.dueDate).toLocaleDateString() : 'TBD',
+      '{{dueDate}}': rfq.dueDate ? new Date(rfq.dueDate).toLocaleDateString() : 'TBD',
+      '{{vendorName}}': rfq.vendor.name || 'N/A',
+      '{{VENDOR_NAME}}': rfq.vendor.name || 'N/A',
+      '{{projectLocation}}': rfq.project.location || 'N/A',
+      '{{PROJECT_LOCATION}}': rfq.project.location || 'N/A',
+      '{{contactName}}': 'GC Legacy Construction',
+      '{{contactEmail}}': this.configService.get('SENDGRID_FROM_EMAIL') || 'noreply@gclegacy.com',
+      '{{contactPhone}}': this.configService.get('CONTACT_PHONE') || '(555) 555-5555',
+      '{{MATERIALS_TABLE}}': this.generateMaterialsTable(rfq.items),
+      '{{materialsTable}}': this.generateMaterialsTable(rfq.items),
+    };
 
-    // Add materials table
-    const materialsTable = this.generateMaterialsTable(rfq.items);
-    html = html.replace('{{MATERIALS_TABLE}}', materialsTable);
+    // Replace all variables
+    Object.entries(replacements).forEach(([key, value]) => {
+      html = html.replace(new RegExp(key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), value);
+    });
 
     return html;
   }

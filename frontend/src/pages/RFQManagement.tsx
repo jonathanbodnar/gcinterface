@@ -304,6 +304,21 @@ export default function RFQManagement() {
                               Send
                             </Button>
                           )}
+                          {rfq.status === 'SENT' && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (confirm('Resend this RFQ to the vendor?')) {
+                                  sendRFQ(rfq.id);
+                                }
+                              }}
+                            >
+                              <Send className="w-4 h-4 mr-2" />
+                              Resend
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -511,6 +526,20 @@ export default function RFQManagement() {
                 <Button onClick={() => sendRFQ(selectedRFQ.id)} disabled={sending}>
                   {sending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
                   Send RFQ
+                </Button>
+              )}
+              {selectedRFQ?.status === 'SENT' && (
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    if (confirm('Resend this RFQ to the vendor?')) {
+                      sendRFQ(selectedRFQ.id);
+                    }
+                  }} 
+                  disabled={sending}
+                >
+                  {sending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
+                  Resend RFQ
                 </Button>
               )}
             </DialogFooter>
