@@ -133,10 +133,10 @@ export default function Projects() {
                     <Layers className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
                     <p className="text-lg font-medium text-muted-foreground mb-2">No Takeoff Jobs Available</p>
                     <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                      The takeoff database connection is not configured yet. Set the <code className="px-1 py-0.5 bg-muted rounded text-xs">TAKEOFF_DATABASE_URL</code> environment variable to connect to your existing takeoff system.
+                      The takeoff API connection is not configured yet. Set the <code className="px-1 py-0.5 bg-muted rounded text-xs">TAKEOFF_API_URL</code> environment variable in the backend to connect to your takeoff system.
                     </p>
                     <p className="text-sm text-muted-foreground mt-4">
-                      For now, you can manually create projects or configure the takeoff database connection in Railway.
+                      For now, you can manually create projects or configure the takeoff API connection in Railway backend environment variables.
                     </p>
                   </div>
                 ) : (
