@@ -17,7 +17,7 @@ export class ProjectsService {
     }
 
     const takeoffJob = await this.takeoffPrisma.$queryRaw`
-      SELECT j.*, f.filename, f.path
+      SELECT j.*, f.filename
       FROM "jobs" j
       LEFT JOIN "files" f ON j."fileId" = f.id
       WHERE j.id = ${takeoffJobId}
@@ -54,27 +54,10 @@ export class ProjectsService {
       },
     });
 
-    // Try to create PlanPage record with PDF from takeoff (non-blocking)
-    try {
-      const pdfUrl = (jobData as any).path; // Only use 'path' column that exists
-      if (pdfUrl) {
-        await this.prisma.planPage.create({
-          data: {
-            projectId: project.id,
-            pageNumber: 1,
-            fileName: jobData.filename || 'plan.pdf',
-            pdfUrl: pdfUrl,
-            materialsOnPage: [],
-          },
-        });
-        console.log(`📄 Created PlanPage with PDF path: ${pdfUrl}`);
-      } else {
-        console.log('📄 No PDF path in takeoff files - skipping PlanPage creation');
-      }
-    } catch (error) {
-      // Don't fail the import if PlanPage creation fails
-      console.warn('⚠️ PlanPage creation failed (non-critical):', error.message);
-    }
+    // Note: PDF URL not available from takeoff DB files table
+    // User can manually upload PDFs or we can add file storage later
+    console.log('📄 PDF URL not available - skipping PlanPage creation');
+    console.log('💡 Tip: You can manually upload PDFs for projects later');
 
     console.log(`✅ Imported takeoff job ${takeoffJobId} as project ${project.id}`);
     console.log(`📐 Total SF: ${totalSF}`);
