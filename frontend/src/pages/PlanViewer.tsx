@@ -32,7 +32,7 @@ export default function PlanViewerPage() {
   const [highlights, setHighlights] = useState<any[]>([]);
   const [activeTool, setActiveTool] = useState<Tool>('none');
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pdfUrl, setPdfUrl] = useState<string>('');
 
   // Trade colors for highlighting
   const tradeColors: Record<string, string> = {
@@ -55,6 +55,11 @@ export default function PlanViewerPage() {
     try {
       const projectResponse = await axios.get(`${API_URL}/projects/${id}`);
       setProject(projectResponse.data.project);
+      
+      // Get PDF URL from planPages
+      if (projectResponse.data.planPages && projectResponse.data.planPages.length > 0) {
+        setPdfUrl(projectResponse.data.planPages[0].pdfUrl);
+      }
 
       const bomResponse = await axios.get(`${API_URL}/bom?projectId=${id}`);
       setBom(bomResponse.data);
@@ -144,6 +149,20 @@ export default function PlanViewerPage() {
       <Layout>
         <div className="flex items-center justify-center h-screen">
           <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+        </div>
+      </Layout>
+    );
+  }
+
+  if (!pdfUrl) {
+    return (
+      <Layout>
+        <div className="text-center py-12">
+          <FileText className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
+          <p className="text-muted-foreground">No PDF plans available for this project</p>
+          <Button variant="outline" className="mt-4" onClick={() => navigate(`/projects/${id}`)}>
+            Back to Project
+          </Button>
         </div>
       </Layout>
     );
