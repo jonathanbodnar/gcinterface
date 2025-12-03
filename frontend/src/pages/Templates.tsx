@@ -4,14 +4,116 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Mail, Plus, Edit2, Loader2, FileText, Award, XCircle, Bold, Italic, List, Heading } from 'lucide-react';
+import { Mail, Plus, Edit2, Loader2, FileText, Award, XCircle, Bold, Italic, List, ListOrdered, Heading, Undo, Redo, AlignLeft, AlignCenter, AlignRight } from 'lucide-react';
 import axios from 'axios';
+import { useEditor, EditorContent } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import Underline from '@tiptap/extension-underline';
+import TextAlign from '@tiptap/extension-text-align';
+import './Templates.css';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+
+// TipTap toolbar component
+function EditorToolbar({ editor }: { editor: any }) {
+  if (!editor) return null;
+
+  return (
+    <div className="tiptap-toolbar">
+      <button
+        onClick={() => editor.chain().focus().toggleBold().run()}
+        className={editor.isActive('bold') ? 'is-active' : ''}
+        type="button"
+      >
+        <Bold className="w-4 h-4" />
+      </button>
+      <button
+        onClick={() => editor.chain().focus().toggleItalic().run()}
+        className={editor.isActive('italic') ? 'is-active' : ''}
+        type="button"
+      >
+        <Italic className="w-4 h-4" />
+      </button>
+      <button
+        onClick={() => editor.chain().focus().toggleUnderline().run()}
+        className={editor.isActive('underline') ? 'is-active' : ''}
+        type="button"
+      >
+        U
+      </button>
+      <div className="tiptap-divider" />
+      <button
+        onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+        className={editor.isActive('heading', { level: 2 }) ? 'is-active' : ''}
+        type="button"
+      >
+        <Heading className="w-4 h-4" /> H2
+      </button>
+      <button
+        onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+        className={editor.isActive('heading', { level: 3 }) ? 'is-active' : ''}
+        type="button"
+      >
+        <Heading className="w-4 h-4" /> H3
+      </button>
+      <div className="tiptap-divider" />
+      <button
+        onClick={() => editor.chain().focus().toggleBulletList().run()}
+        className={editor.isActive('bulletList') ? 'is-active' : ''}
+        type="button"
+      >
+        <List className="w-4 h-4" />
+      </button>
+      <button
+        onClick={() => editor.chain().focus().toggleOrderedList().run()}
+        className={editor.isActive('orderedList') ? 'is-active' : ''}
+        type="button"
+      >
+        <ListOrdered className="w-4 h-4" />
+      </button>
+      <div className="tiptap-divider" />
+      <button
+        onClick={() => editor.chain().focus().setTextAlign('left').run()}
+        className={editor.isActive({ textAlign: 'left' }) ? 'is-active' : ''}
+        type="button"
+      >
+        <AlignLeft className="w-4 h-4" />
+      </button>
+      <button
+        onClick={() => editor.chain().focus().setTextAlign('center').run()}
+        className={editor.isActive({ textAlign: 'center' }) ? 'is-active' : ''}
+        type="button"
+      >
+        <AlignCenter className="w-4 h-4" />
+      </button>
+      <button
+        onClick={() => editor.chain().focus().setTextAlign('right').run()}
+        className={editor.isActive({ textAlign: 'right' }) ? 'is-active' : ''}
+        type="button"
+      >
+        <AlignRight className="w-4 h-4" />
+      </button>
+      <div className="tiptap-divider" />
+      <button
+        onClick={() => editor.chain().focus().undo().run()}
+        disabled={!editor.can().undo()}
+        type="button"
+      >
+        <Undo className="w-4 h-4" />
+      </button>
+      <button
+        onClick={() => editor.chain().focus().redo().run()}
+        disabled={!editor.can().redo()}
+        type="button"
+      >
+        <Redo className="w-4 h-4" />
+      </button>
+    </div>
+  );
+}
 
 export default function Templates() {
   const [emailTemplates, setEmailTemplates] = useState<any[]>([]);
@@ -23,6 +125,28 @@ export default function Templates() {
     body: '',
   });
   const [loading, setLoading] = useState(false);
+
+  // TipTap editor
+  const editor = useEditor({
+    extensions: [
+      StarterKit,
+      Underline,
+      TextAlign.configure({
+        types: ['heading', 'paragraph'],
+      }),
+    ],
+    content: templateForm.body,
+    onUpdate: ({ editor }) => {
+      setTemplateForm({ ...templateForm, body: editor.getHTML() });
+    },
+  });
+
+  // Update editor content when template changes
+  useEffect(() => {
+    if (editor && templateForm.body !== editor.getHTML()) {
+      editor.commands.setContent(templateForm.body);
+    }
+  }, [templateForm.body]);
 
   useEffect(() => {
     loadEmailTemplates();
@@ -254,110 +378,17 @@ export default function Templates() {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="templateBody">Email Body</Label>
+                <Label>Email Body - Type Like Word (No HTML Needed!)</Label>
                 <p className="text-xs text-muted-foreground mb-2">
-                  Use the formatting buttons below or type HTML directly. Press Enter twice for line breaks.
+                  Just type normally and use buttons to format. Insert variables by typing: {"{{projectName}}"}, {"{{vendorName}}"}, etc.
                 </p>
-                <div className="flex gap-1 mb-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      const textarea = document.getElementById('templateBody') as HTMLTextAreaElement;
-                      const start = textarea.selectionStart;
-                      const end = textarea.selectionEnd;
-                      const selectedText = templateForm.body.substring(start, end) || 'text';
-                      const newText = templateForm.body.substring(0, start) + `<strong>${selectedText}</strong>` + templateForm.body.substring(end);
-                      setTemplateForm({ ...templateForm, body: newText });
-                    }}
-                    title="Bold"
-                  >
-                    <Bold className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      const textarea = document.getElementById('templateBody') as HTMLTextAreaElement;
-                      const start = textarea.selectionStart;
-                      const end = textarea.selectionEnd;
-                      const selectedText = templateForm.body.substring(start, end) || 'text';
-                      const newText = templateForm.body.substring(0, start) + `<em>${selectedText}</em>` + templateForm.body.substring(end);
-                      setTemplateForm({ ...templateForm, body: newText });
-                    }}
-                    title="Italic"
-                  >
-                    <Italic className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      setTemplateForm({ ...templateForm, body: templateForm.body + '\n<p>&nbsp;</p>\n<h3>Heading</h3>\n' });
-                    }}
-                    title="Heading"
-                  >
-                    <Heading className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      setTemplateForm({ ...templateForm, body: templateForm.body + '\n<ul>\n  <li>Item 1</li>\n  <li>Item 2</li>\n</ul>\n' });
-                    }}
-                    title="Bullet List"
-                  >
-                    <List className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      setTemplateForm({ ...templateForm, body: templateForm.body + '<p>&nbsp;</p>\n<p>&nbsp;</p>\n' });
-                    }}
-                    title="Add Line Breaks"
-                  >
-                    ↵ Space
-                  </Button>
+                <EditorToolbar editor={editor} />
+                <div className="border border-t-0 rounded-b-md">
+                  <EditorContent editor={editor} className="tiptap-editor" />
                 </div>
-                <Textarea
-                  id="templateBody"
-                  value={templateForm.body}
-                  onChange={(e) => setTemplateForm({ ...templateForm, body: e.target.value })}
-                  rows={16}
-                  placeholder="<p>Dear {{vendorName}},</p>
-
-<p>We are requesting your proposal for installation services:</p>
-
-<p><strong>Project:</strong> {{projectName}}<br/>
-<strong>Location:</strong> {{projectLocation}}<br/>
-<strong>Due Date:</strong> {{dueDate}}</p>
-
-<p><strong>Scope of Work:</strong></p>
-<ul>
-  <li>Furnish all labor, equipment, supervision</li>
-  <li>Install materials per specifications</li>
-  <li>Coordinate with other trades</li>
-</ul>
-
-<p><strong>Materials to Install:</strong></p>
-{{materialsTable}}
-
-<p>Best regards,<br/>GC Legacy Construction</p>"
-                  className="font-mono text-sm"
-                />
-                <div className="border rounded-md p-4 bg-gray-50 max-h-80 overflow-auto mt-2">
-                  <p className="text-xs font-semibold mb-3 text-gray-600">Live Preview:</p>
-                  <div 
-                    className="prose prose-sm max-w-none bg-white p-4 rounded"
-                    dangerouslySetInnerHTML={{ __html: templateForm.body }}
-                  />
-                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  💡 Tip: Press <kbd className="px-1.5 py-0.5 bg-muted rounded text-xs">Enter</kbd> twice to create spacing between paragraphs
+                </p>
               </div>
               <div className="bg-muted p-3 rounded-md">
                 <p className="text-xs font-semibold mb-2">Available Variables:</p>
