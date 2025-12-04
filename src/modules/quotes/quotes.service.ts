@@ -92,28 +92,46 @@ export class QuotesService {
   }
 
   async parseQuoteFromEmail(rfqId: string, emailBody: string, attachments?: Buffer[]) {
-    // Parse quote from email body or Excel attachment
+    console.log('🔍 parseQuoteFromEmail called');
+    console.log(`  Attachments: ${attachments?.length || 0}`);
+    console.log(`  Email body length: ${emailBody?.length || 0} chars`);
+    
     let quoteData = null;
 
     // Try to parse from attachments (Excel or PDF)
     if (attachments && attachments.length > 0) {
-      for (const attachment of attachments) {
+      for (let i = 0; i < attachments.length; i++) {
+        const attachment = attachments[i];
+        console.log(`\n🔍 Trying to parse attachment ${i + 1}/${attachments.length} (${attachment.length} bytes)`);
+        
+        // Try PDF first (since that's what we expect)
         try {
-          // Try Excel first
-          const workbook = xlsx.read(attachment, { type: 'buffer' });
-          quoteData = this.parseExcelQuote(workbook);
-          if (quoteData) break;
-        } catch (excelError) {
-          // Try PDF if Excel fails
+          console.log('  📄 Attempting PDF parse...');
+          const pdfData = await pdfParse(attachment);
+          console.log(`  📄 PDF extracted: ${pdfData.text.length} chars of text`);
+          quoteData = this.parsePDFQuote(pdfData.text);
+          if (quoteData) {
+            console.log('  ✅ Successfully parsed quote from PDF!');
+            break;
+          } else {
+            console.log('  ⚠️ PDF parsed but no quote data extracted');
+          }
+        } catch (pdfError) {
+          console.log(`  ❌ PDF parse failed: ${pdfError.message}`);
+          
+          // Try Excel as fallback
           try {
-            const pdfData = await pdfParse(attachment);
-            quoteData = this.parsePDFQuote(pdfData.text);
+            console.log('  📊 Attempting Excel parse...');
+            const workbook = xlsx.read(attachment, { type: 'buffer' });
+            quoteData = this.parseExcelQuote(workbook);
             if (quoteData) {
-              console.log('✅ Parsed quote from PDF');
+              console.log('  ✅ Successfully parsed quote from Excel!');
               break;
+            } else {
+              console.log('  ⚠️ Excel parsed but no quote data extracted');
             }
-          } catch (pdfError) {
-            console.log('Failed to parse attachment as Excel or PDF:', excelError.message);
+          } catch (excelError) {
+            console.log(`  ❌ Excel parse failed: ${excelError.message}`);
           }
         }
       }
@@ -121,12 +139,20 @@ export class QuotesService {
 
     // Fallback to parsing email body text
     if (!quoteData) {
+      console.log('⚠️ No quote data from attachments, trying email body...');
       quoteData = this.parseEmailBodyQuote(emailBody);
+      if (quoteData) {
+        console.log('✅ Parsed quote from email body');
+      }
     }
 
     if (!quoteData) {
+      console.log('❌ Could not parse quote from any source');
       throw new Error('Could not parse quote from email or attachments');
     }
+
+    console.log(`\n📊 Final quote data: ${quoteData.items.length} items, total: $${quoteData.totalAmount}`);
+
 
     // Get RFQ to link quote (search by rfqNumber, not id)
     const rfq = await this.prisma.rFQ.findUnique({
