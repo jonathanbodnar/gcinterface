@@ -490,8 +490,16 @@ export class QuotesService {
   private parsePDFQuote(pdfText: string): any {
     console.log('📄 Parsing PDF quote...');
     console.log('📄 PDF Text length:', pdfText.length, 'chars');
+    console.log('📄 First 500 chars of PDF text:');
+    console.log(pdfText.substring(0, 500));
+    console.log('📄 ---END SAMPLE---');
     
     const lines = pdfText.split('\n').map(l => l.trim()).filter(Boolean);
+    console.log(`📄 PDF has ${lines.length} non-empty lines`);
+    console.log('📄 First 10 lines:');
+    lines.slice(0, 10).forEach((line, i) => console.log(`  ${i + 1}: "${line}"`));
+    console.log('📄 ---END LINES---');
+    
     const items = [];
     let totalAmount = 0;
 
