@@ -70,13 +70,13 @@ export class WebhooksController {
 
     try {
       // Extract RFQ ID from subject line first (more reliable)
-      // Format: "Re: Request for Quote - ProjectName - RFQ #RFQ-176479"
+      // Format: "Re: Request for Quote - RFQ-1764806865987"
       let rfqId: string | null = null;
       
-      // Try subject line first
-      const subjectMatch = payload.subject.match(/RFQ[- ]#?([A-Z0-9-]+)/i);
+      // Try subject line first - capture the full "RFQ-XXXXX" format
+      const subjectMatch = payload.subject.match(/(RFQ-[0-9]+)/i);
       if (subjectMatch) {
-        rfqId = subjectMatch[1];
+        rfqId = subjectMatch[1]; // Captures "RFQ-1764806865987"
         console.log(`📋 RFQ ID from subject: ${rfqId}`);
       }
       
