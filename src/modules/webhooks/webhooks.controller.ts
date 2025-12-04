@@ -108,14 +108,14 @@ export class WebhooksController {
   }
 
   private async processQuote(rfqId: string, payload: SendGridInbound) {
-    // Verify RFQ exists
+    // Verify RFQ exists (searching by rfqNumber, NOT id)
     const rfq = await this.quotesService['prisma'].rFQ.findUnique({
-      where: { id: rfqId },
+      where: { rfqNumber: rfqId },
       include: { vendor: true },
     });
 
     if (!rfq) {
-      console.log(`⚠️ RFQ ${rfqId} not found`);
+      console.log(`⚠️ RFQ with number ${rfqId} not found`);
       return { error: 'RFQ not found' };
     }
 
