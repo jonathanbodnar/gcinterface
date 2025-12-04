@@ -128,9 +128,9 @@ export class QuotesService {
       throw new Error('Could not parse quote from email or attachments');
     }
 
-    // Get RFQ to link quote
+    // Get RFQ to link quote (search by rfqNumber, not id)
     const rfq = await this.prisma.rFQ.findUnique({
-      where: { id: rfqId },
+      where: { rfqNumber: rfqId },
       include: {
         vendor: true,
         items: {
@@ -146,7 +146,7 @@ export class QuotesService {
     });
 
     if (!rfq) {
-      throw new Error('RFQ not found');
+      throw new Error(`RFQ with number ${rfqId} not found`);
     }
 
     // Create quote record

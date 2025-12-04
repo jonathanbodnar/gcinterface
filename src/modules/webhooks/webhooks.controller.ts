@@ -121,29 +121,23 @@ export class WebhooksController {
 
     console.log(`✅ RFQ found: ${rfq.rfqNumber} for ${rfq.vendor.name}`);
 
-    // Extract attachments
+    // Extract attachments (multer stores files in req.files)
     const attachments: Buffer[] = [];
-    const attachmentCount = parseInt(payload.attachments || '0');
-
-    for (let i = 1; i <= attachmentCount; i++) {
-      const attKey = `attachment${i}`;
-      if (payload[attKey]) {
-        try {
-          const att = typeof payload[attKey] === 'string' 
-            ? JSON.parse(payload[attKey])
-            : payload[attKey];
-          
-          // Convert base64 to buffer
-          const buffer = Buffer.from(att.content || att, 'base64');
-          attachments.push(buffer);
-          console.log(`  📎 Attachment: ${att.filename || `attachment${i}`} (${att.type || 'unknown'})`);
-        } catch (error) {
-          console.error(`Failed to parse attachment${i}:`, error.message);
-        }
+    const files = (req as any).files || [];
+    
+    console.log(`📎 Multer parsed ${files.length} files`);
+    
+    for (const file of files) {
+      try {
+        // Multer provides the buffer directly
+        attachments.push(file.buffer);
+        console.log(`  📎 Attachment: ${file.originalname || file.fieldname} (${file.mimetype})`);
+      } catch (error) {
+        console.error(`Failed to process file ${file.originalname}:`, error.message);
       }
     }
 
-    console.log(`📎 Total attachments: ${attachments.length}`);
+    console.log(`📎 Total attachments ready for parsing: ${attachments.length}`);
 
     // Parse quote
     const emailBody = payload.text || payload.html || '';
