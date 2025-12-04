@@ -541,12 +541,12 @@ export class QuotesService {
         continue;
       }
 
-      // Pattern 2: Standard table format "Description  Qty  UOM  Price  Total"
-      const pattern2 = line.match(/(.+?)\s+(\d+\.?\d*)\s+(\w+)\s+\$?([\d,]+\.?\d*)\s+\$?([\d,]+\.?\d*)/);
+      // Pattern 3: Standard table format "Description  Qty  UOM  Price  Total"
+      const pattern3 = line.match(/(.+?)\s+(\d+\.?\d*)\s+(\w+)\s+\$?([\d,]+\.?\d*)\s+\$?([\d,]+\.?\d*)/);
       
-      if (pattern2) {
-        const [, description, qty, uom, unitPrice, total] = pattern2;
-        console.log(`  ✅ Matched: ${description} | ${qty} ${uom} @ $${unitPrice} = $${total}`);
+      if (pattern3) {
+        const [, description, qty, uom, unitPrice, total] = pattern3;
+        console.log(`  ✅ Matched pattern 3: ${description} | ${qty} ${uom} @ $${unitPrice} = $${total}`);
         items.push({
           description: description.trim(),
           quantity: parseFloat(qty),
