@@ -462,20 +462,38 @@ export class QuotesService {
   }
 
   private parsePDFQuote(pdfText: string): any {
-    // Parse PDF text content (similar to email body parsing but more structured)
+    console.log('📄 Parsing PDF quote...');
+    console.log('📄 PDF Text length:', pdfText.length, 'chars');
+    
     const lines = pdfText.split('\n').map(l => l.trim()).filter(Boolean);
     const items = [];
     let totalAmount = 0;
 
-    // Look for table-like structures in PDF
     for (const line of lines) {
-      // Pattern: "Item Description    Qty    Unit    Price    Total"
-      // Example: "VCT Flooring 12x12    3840    SF    $3.50    $13,440"
+      // Pattern 1: "Item#  Description  Qty UOM  $Price / UOM  ~$Total"
+      // Example: "1  4-inch Rubber Base Molding  1.05 LF  $2.25 / LF  ~$2.36"
+      const pattern1 = line.match(/^\d+\s+(.+?)\s+([\d.]+)\s+(\w+)\s+\$?([\d,]+\.?\d*)\s*\/\s*\w+\s+[~]?\$?([\d,]+\.?\d*)/);
       
-      const match = line.match(/(.+?)\s+(\d+\.?\d*)\s+(\w+)\s+\$?([\d,]+\.?\d*)\s+\$?([\d,]+\.?\d*)/);
+      if (pattern1) {
+        const [, description, qty, uom, unitPrice, total] = pattern1;
+        console.log(`  ✅ Matched: ${description} | ${qty} ${uom} @ $${unitPrice} = $${total}`);
+        items.push({
+          description: description.trim(),
+          quantity: parseFloat(qty),
+          uom: uom.trim(),
+          unitPrice: parseFloat(unitPrice.replace(/,/g, '')),
+          totalPrice: parseFloat(total.replace(/,/g, '')),
+        });
+        totalAmount += parseFloat(total.replace(/,/g, ''));
+        continue;
+      }
+
+      // Pattern 2: Standard table format "Description  Qty  UOM  Price  Total"
+      const pattern2 = line.match(/(.+?)\s+(\d+\.?\d*)\s+(\w+)\s+\$?([\d,]+\.?\d*)\s+\$?([\d,]+\.?\d*)/);
       
-      if (match) {
-        const [, description, qty, uom, unitPrice, total] = match;
+      if (pattern2) {
+        const [, description, qty, uom, unitPrice, total] = pattern2;
+        console.log(`  ✅ Matched: ${description} | ${qty} ${uom} @ $${unitPrice} = $${total}`);
         items.push({
           description: description.trim(),
           quantity: parseFloat(qty),
@@ -484,26 +502,33 @@ export class QuotesService {
           totalPrice: parseFloat(total.replace(/,/g, '')),
         });
         totalAmount += parseFloat(total.replace(/,/g, ''));
-      } else {
-        // Simpler pattern: "Description: $price"
-        const simpleMatch = line.match(/(.+?):\s*\$?([\d,]+\.?\d*)/);
-        if (simpleMatch) {
-          const price = parseFloat(simpleMatch[2].replace(/,/g, ''));
-          if (price > 10) { // Filter out small numbers that aren't prices
-            items.push({
-              description: simpleMatch[1].trim(),
-              quantity: 1,
-              uom: 'EA',
-              unitPrice: price,
-              totalPrice: price,
-            });
-            totalAmount += price;
-          }
+        continue;
+      }
+
+      // Pattern 3: Simple "Description: $price"
+      const pattern3 = line.match(/(.+?):\s*\$?([\d,]+\.?\d*)/);
+      if (pattern3) {
+        const price = parseFloat(pattern3[2].replace(/,/g, ''));
+        if (price > 10) {
+          console.log(`  ✅ Matched simple: ${pattern3[1]} @ $${price}`);
+          items.push({
+            description: pattern3[1].trim(),
+            quantity: 1,
+            uom: 'EA',
+            unitPrice: price,
+            totalPrice: price,
+          });
+          totalAmount += price;
         }
       }
     }
 
-    if (items.length === 0) return null;
+    console.log(`📄 PDF parsing complete: ${items.length} items found, total: $${totalAmount}`);
+
+    if (items.length === 0) {
+      console.log('⚠️ No items found in PDF, returning null');
+      return null;
+    }
 
     return {
       quoteNumber: null,
