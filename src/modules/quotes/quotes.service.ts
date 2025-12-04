@@ -149,12 +149,12 @@ export class QuotesService {
       throw new Error(`RFQ with number ${rfqId} not found`);
     }
 
-    // Create quote record
+    // Create quote record (use rfq.id, not rfqId which is the rfqNumber)
     const quote = await this.prisma.quote.create({
       data: {
         projectId: rfq.projectId,
         vendorId: rfq.vendorId,
-        rfqId: rfqId,
+        rfqId: rfq.id, // Use the database ID, not the rfqNumber
         quoteNumber: quoteData.quoteNumber || `Q-${Date.now()}`,
         totalAmount: quoteData.totalAmount,
         validUntil: quoteData.validUntil,
