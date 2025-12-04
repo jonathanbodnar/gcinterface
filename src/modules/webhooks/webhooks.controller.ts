@@ -96,7 +96,7 @@ export class WebhooksController {
         return { error: 'Could not identify RFQ. Please include RFQ number in subject.' };
       }
 
-      return await this.processQuote(rfqId, payload);
+      return await this.processQuote(rfqId, payload, req);
     } catch (error) {
       console.error('❌ Error processing inbound email:', error);
       return {
@@ -107,7 +107,7 @@ export class WebhooksController {
     }
   }
 
-  private async processQuote(rfqId: string, payload: SendGridInbound) {
+  private async processQuote(rfqId: string, payload: SendGridInbound, req: Request) {
     // Verify RFQ exists (searching by rfqNumber, NOT id)
     const rfq = await this.quotesService['prisma'].rFQ.findUnique({
       where: { rfqNumber: rfqId },
