@@ -504,13 +504,32 @@ export class QuotesService {
     let totalAmount = 0;
 
     for (const line of lines) {
-      // Pattern 1: "Item#  Description  Qty UOM  $Price / UOM  ~$Total"
-      // Example: "1  4-inch Rubber Base Molding  1.05 LF  $2.25 / LF  ~$2.36"
-      const pattern1 = line.match(/^\d+\s+(.+?)\s+([\d.]+)\s+(\w+)\s+\$?([\d,]+\.?\d*)\s*\/\s*\w+\s+[~]?\$?([\d,]+\.?\d*)/);
+      // Pattern 1: Concatenated format from your PDF
+      // Example: "14-inch Rubber Base Molding1.05 LF$2.25 / LF~$2.36"
+      // Format: ItemNum + Description + Qty + UOM + $Price / UOM + ~$Total
+      const pattern1 = line.match(/^(\d+)(.+?)([\d.]+)\s+([A-Z]+)\s*\$?([\d,]+\.?\d*)\s*\/\s*[A-Za-z]+\s*[~]?\$?([\d,]+\.?\d*)/);
       
       if (pattern1) {
-        const [, description, qty, uom, unitPrice, total] = pattern1;
-        console.log(`  ✅ Matched: ${description} | ${qty} ${uom} @ $${unitPrice} = $${total}`);
+        const [, itemNum, description, qty, uom, unitPrice, total] = pattern1;
+        console.log(`  ✅ Matched pattern 1: ${description.trim()} | ${qty} ${uom} @ $${unitPrice} = $${total}`);
+        items.push({
+          description: description.trim(),
+          quantity: parseFloat(qty),
+          uom: uom.trim(),
+          unitPrice: parseFloat(unitPrice.replace(/,/g, '')),
+          totalPrice: parseFloat(total.replace(/,/g, '')),
+        });
+        totalAmount += parseFloat(total.replace(/,/g, ''));
+        continue;
+      }
+      
+      // Pattern 2: Whitespace-separated format "Item#  Description  Qty UOM  $Price / UOM  ~$Total"
+      // Example: "1  4-inch Rubber Base Molding  1.05 LF  $2.25 / LF  ~$2.36"
+      const pattern2 = line.match(/^\d+\s+(.+?)\s+([\d.]+)\s+(\w+)\s+\$?([\d,]+\.?\d*)\s*\/\s*\w+\s+[~]?\$?([\d,]+\.?\d*)/);
+      
+      if (pattern2) {
+        const [, description, qty, uom, unitPrice, total] = pattern2;
+        console.log(`  ✅ Matched pattern 2: ${description} | ${qty} ${uom} @ $${unitPrice} = $${total}`);
         items.push({
           description: description.trim(),
           quantity: parseFloat(qty),
