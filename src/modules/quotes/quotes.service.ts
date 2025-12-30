@@ -558,14 +558,14 @@ export class QuotesService {
         continue;
       }
 
-      // Pattern 3: Simple "Description: $price"
-      const pattern3 = line.match(/(.+?):\s*\$?([\d,]+\.?\d*)/);
-      if (pattern3) {
-        const price = parseFloat(pattern3[2].replace(/,/g, ''));
+      // Pattern 4: Simple "Description: $price"
+      const pattern4 = line.match(/(.+?):\s*\$?([\d,]+\.?\d*)/);
+      if (pattern4) {
+        const price = parseFloat(pattern4[2].replace(/,/g, ''));
         if (price > 10) {
-          console.log(`  ✅ Matched simple: ${pattern3[1]} @ $${price}`);
+          console.log(`  ✅ Matched pattern 4: ${pattern4[1]} @ $${price}`);
           items.push({
-            description: pattern3[1].trim(),
+            description: pattern4[1].trim(),
             quantity: 1,
             uom: 'EA',
             unitPrice: price,
