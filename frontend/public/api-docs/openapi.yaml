@@ -1,0 +1,820 @@
+openapi: 3.0.0
+info:
+  title: GC Legacy Takeoff API
+  description: |
+    AI-powered construction plan takeoff system that extracts measurements and generates material quantities from PDF plans.
+    
+    ## Overview
+    Upload PDF construction plans and receive:
+    - Extracted geometry (rooms, walls, pipes, ducts, fixtures)
+    - Calculated material quantities with SKUs
+    - Consolidated bill of materials
+    
+    ## Processing Pipeline
+    1. **Upload PDF** → Job created (QUEUED)
+    2. **AI Processing** → Features extracted (PROCESSING)
+    3. **Rules Applied** → Materials calculated
+    4. **Results Ready** → Job complete (COMPLETED)
+    
+    ## Base URL
+    - Production: `http://77.42.84.35:3000/v1`
+    - Documentation: `http://77.42.84.35:3000/docs`
+  version: 1.0.0
+  contact:
+    name: GC Legacy Support
+    email: support@gclegacy.com
+  license:
+    name: Proprietary
+    
+servers:
+  - url: http://77.42.84.35:3000/v1
+    description: Production server (Hetzner VPS)
+  - url: http://localhost:3000/v1
+    description: Local development server
+
+tags:
+  - name: Jobs
+    description: Job management and processing
+  - name: Materials
+    description: Material quantities and bill of materials
+  - name: Takeoff
+    description: Extracted features and geometry
+  - name: Rules
+    description: Material calculation rules
+  - name: Health
+    description: System health and monitoring
+
+paths:
+  /jobs:
+    post:
+      tags:
+        - Jobs
+      summary: Create new job (Upload PDF)
+      description: |
+        Upload a PDF construction plan and start processing job.
+        
+        **Processing Steps:**
+        1. PDF converted to images (1s per page)
+        2. AI extracts geometry (3-6s per page)
+        3. Features stored in database
+        4. Material rules applied
+        5. Results consolidated
+        
+        **Average Processing Time:**
+        - 1-page PDF: 5-7 seconds
+        - 10-page PDF: 60-90 seconds
+        - 20-page PDF: ~90 seconds
+      operationId: createJob
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: PDF file to process
+                disciplines:
+                  type: string
+                  description: Comma-separated disciplines to extract
+                  example: "A,P,M,E"
+                  enum:
+                    - A
+                    - P
+                    - M
+                    - E
+                    - "A,P"
+                    - "A,P,M"
+                    - "A,P,M,E"
+                targets:
+                  type: string
+                  description: Comma-separated feature types to extract
+                  example: "rooms,walls,pipes,ducts,fixtures"
+                materialsRuleSetId:
+                  type: string
+                  description: ID of rule set to use for material calculations
+                  example: "default-rules-v1"
+      responses:
+        '201':
+          description: Job created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobCreated'
+              example:
+                jobId: "cmihy2nzv0001z6br43xmb5t9"
+                status: "QUEUED"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    
+    get:
+      tags:
+        - Jobs
+      summary: List jobs
+      description: Get list of jobs, optionally filtered by status
+      operationId: listJobs
+      parameters:
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/JobStatus'
+          description: Filter by job status
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+          description: Number of jobs to return
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+          description: Number of jobs to skip
+      responses:
+        '200':
+          description: List of jobs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  jobs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/JobStatus'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+
+  /jobs/{jobId}:
+    get:
+      tags:
+        - Jobs
+      summary: Get job status
+      description: |
+        Get current status and progress of a processing job.
+        
+        **Status Values:**
+        - `QUEUED`: Job created, waiting for processing
+        - `PROCESSING`: Currently analyzing PDF
+        - `COMPLETED`: Success, materials available
+        - `FAILED`: Error occurred (see error field)
+        - `CANCELLED`: User cancelled job
+      operationId: getJobStatus
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Job status retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobStatusResponse'
+              examples:
+                queued:
+                  summary: Job queued
+                  value:
+                    jobId: "cmihy2nzv0001z6br43xmb5t9"
+                    status: "QUEUED"
+                    progress: 0
+                    startedAt: null
+                    finishedAt: null
+                    error: null
+                processing:
+                  summary: Job processing
+                  value:
+                    jobId: "cmihy2nzv0001z6br43xmb5t9"
+                    status: "PROCESSING"
+                    progress: 45.5
+                    startedAt: "2026-01-14T10:30:00Z"
+                    finishedAt: null
+                    error: null
+                completed:
+                  summary: Job completed
+                  value:
+                    jobId: "cmihy2nzv0001z6br43xmb5t9"
+                    status: "COMPLETED"
+                    progress: 100
+                    startedAt: "2026-01-14T10:30:00Z"
+                    finishedAt: "2026-01-14T10:31:32Z"
+                    error: null
+        '404':
+          $ref: '#/components/responses/NotFound'
+    
+    delete:
+      tags:
+        - Jobs
+      summary: Cancel job
+      description: Cancel a queued or processing job
+      operationId: cancelJob
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Job cancelled successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Job cancelled successfully"
+        '400':
+          description: Cannot cancel completed or failed job
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /materials/{jobId}:
+    get:
+      tags:
+        - Materials
+      summary: Get calculated materials
+      description: |
+        Get consolidated bill of materials for a completed job.
+        
+        **Response includes:**
+        - SKU and description
+        - Calculated quantity
+        - Unit of measure (SF, LF, EA, SHT)
+        - Source features that generated the material
+        - Rule that was applied
+        
+        **Only available when job status is COMPLETED**
+      operationId: getMaterials
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Materials list retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MaterialsResponse'
+              example:
+                jobId: "cmihy2nzv0001z6br43xmb5t9"
+                materials:
+                  - id: "mat_001"
+                    sku: "ARM-EXCELON-51910"
+                    description: "Armstrong Excelon VCT Flooring"
+                    qty: 8986
+                    uom: "SF"
+                    ruleId: "rule_room_flooring"
+                    sources:
+                      features: ["feat_room1", "feat_room2", "feat_room3"]
+                  - id: "mat_002"
+                    sku: "SW-7006-PAINT"
+                    description: "Sherwin Williams Wall Paint"
+                    qty: 8153
+                    uom: "SF"
+                    ruleId: "rule_room_paint"
+                    sources:
+                      features: ["feat_room1", "feat_room2"]
+                summary:
+                  totalSKUs: 12
+                  totalValue: 45280.00
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Job not yet completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statusCode:
+                    type: integer
+                    example: 409
+                  message:
+                    type: string
+                    example: "Job is still processing. Current status: PROCESSING (45% complete)"
+                  error:
+                    type: string
+                    example: "Conflict"
+
+  /takeoff/{jobId}:
+    get:
+      tags:
+        - Takeoff
+      summary: Get extracted features
+      description: |
+        Get raw geometry features extracted from PDF by AI.
+        
+        **Feature Types:**
+        - ROOM: Rooms with areas and polygons
+        - WALL: Walls with lengths and polylines
+        - PIPE: Plumbing pipes with service type and diameter
+        - DUCT: HVAC ducts with sizes
+        - FIXTURE: Electrical/plumbing fixtures
+        - EQUIPMENT: HVAC equipment
+      operationId: getTakeoff
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [ROOM, WALL, PIPE, DUCT, FIXTURE, EQUIPMENT]
+          description: Filter by feature type
+      responses:
+        '200':
+          description: Features retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TakeoffResponse'
+              example:
+                jobId: "cmihy2nzv0001z6br43xmb5t9"
+                features:
+                  - id: "feat_room1"
+                    type: "ROOM"
+                    area: 225.5
+                    props:
+                      name: "OFFICE 101"
+                      polygon: [[10, 20], [50, 20], [50, 80], [10, 80]]
+                      program: "Office"
+                    sheetId: "sheet_1"
+                  - id: "feat_wall1"
+                    type: "WALL"
+                    length: 40.0
+                    props:
+                      polyline: [[10, 20], [50, 20]]
+                      partitionType: "PT-1"
+                    sheetId: "sheet_1"
+                summary:
+                  totalFeatures: 420
+                  byType:
+                    ROOM: 22
+                    WALL: 105
+                    PIPE: 45
+                    DUCT: 30
+                    FIXTURE: 38
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /jobs/{jobId}/sheets:
+    get:
+      tags:
+        - Jobs
+      summary: Get PDF sheets/pages
+      description: Get information about individual PDF pages
+      operationId: getSheets
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Sheets retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sheets:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Sheet'
+              example:
+                sheets:
+                  - id: "sheet_1"
+                    index: 0
+                    name: "FLOOR PLAN - LEVEL 1"
+                    discipline: "A"
+                    scale: "1/4\"=1'-0\""
+                    units: "ft"
+                  - id: "sheet_2"
+                    index: 1
+                    name: "PLUMBING PLAN - LEVEL 1"
+                    discipline: "P"
+                    scale: "1/4\"=1'-0\""
+                    units: "ft"
+
+  /rules:
+    get:
+      tags:
+        - Rules
+      summary: List rule sets
+      description: Get available material calculation rule sets
+      operationId: listRules
+      responses:
+        '200':
+          description: List of rule sets
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ruleSets:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RuleSetSummary'
+    
+    post:
+      tags:
+        - Rules
+      summary: Create rule set
+      description: Create a new material calculation rule set
+      operationId: createRuleSet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuleSetCreate'
+      responses:
+        '201':
+          description: Rule set created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ruleSetId:
+                    type: string
+                    example: "custom-rules-v1"
+
+  /rules/{ruleSetId}:
+    get:
+      tags:
+        - Rules
+      summary: Get rule set
+      description: Get detailed rule set configuration
+      operationId: getRuleSet
+      parameters:
+        - name: ruleSetId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "default-rules-v1"
+      responses:
+        '200':
+          description: Rule set retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuleSet'
+
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check
+      description: Check if API is running
+      operationId: healthCheck
+      responses:
+        '200':
+          description: API is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+                  timestamp:
+                    type: string
+                    format: date-time
+                  uptime:
+                    type: number
+                    description: Uptime in seconds
+
+  /stats:
+    get:
+      tags:
+        - Health
+      summary: Get system statistics
+      description: Get system performance metrics
+      operationId: getStats
+      responses:
+        '200':
+          description: Statistics retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  totalJobs:
+                    type: integer
+                  completedJobs:
+                    type: integer
+                  averageProcessingTime:
+                    type: number
+                    description: Average seconds per page
+                  accuracy:
+                    type: object
+                    properties:
+                      overall:
+                        type: number
+                        example: 92
+                      byTrade:
+                        type: object
+                        properties:
+                          architectural:
+                            type: number
+                          plumbing:
+                            type: number
+                          mechanical:
+                            type: number
+                          electrical:
+                            type: number
+
+components:
+  parameters:
+    JobId:
+      name: jobId
+      in: path
+      required: true
+      description: Unique job identifier
+      schema:
+        type: string
+      example: "cmihy2nzv0001z6br43xmb5t9"
+
+  schemas:
+    JobStatus:
+      type: string
+      enum:
+        - QUEUED
+        - PROCESSING
+        - COMPLETED
+        - FAILED
+        - CANCELLED
+      description: |
+        Job processing status:
+        - `QUEUED`: Waiting for processing
+        - `PROCESSING`: Currently analyzing
+        - `COMPLETED`: Successfully finished
+        - `FAILED`: Error occurred
+        - `CANCELLED`: User cancelled
+
+    JobCreated:
+      type: object
+      required:
+        - jobId
+        - status
+      properties:
+        jobId:
+          type: string
+          description: Unique job identifier
+        status:
+          $ref: '#/components/schemas/JobStatus'
+
+    JobStatusResponse:
+      type: object
+      required:
+        - jobId
+        - status
+        - progress
+      properties:
+        jobId:
+          type: string
+        status:
+          $ref: '#/components/schemas/JobStatus'
+        progress:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: Processing progress percentage
+        startedAt:
+          type: string
+          format: date-time
+          nullable: true
+        finishedAt:
+          type: string
+          format: date-time
+          nullable: true
+        error:
+          type: string
+          nullable: true
+          description: Error message if status is FAILED
+
+    Material:
+      type: object
+      required:
+        - id
+        - sku
+        - qty
+        - uom
+      properties:
+        id:
+          type: string
+        sku:
+          type: string
+          description: Stock keeping unit / product code
+        description:
+          type: string
+          description: Material description
+        qty:
+          type: number
+          description: Quantity
+        uom:
+          type: string
+          description: Unit of measure
+          enum: [SF, LF, EA, SHT, CY, TON]
+        ruleId:
+          type: string
+          description: Rule that generated this material
+        sources:
+          type: object
+          properties:
+            features:
+              type: array
+              items:
+                type: string
+              description: Feature IDs that contributed to this material
+
+    MaterialsResponse:
+      type: object
+      required:
+        - jobId
+        - materials
+      properties:
+        jobId:
+          type: string
+        materials:
+          type: array
+          items:
+            $ref: '#/components/schemas/Material'
+        summary:
+          type: object
+          properties:
+            totalSKUs:
+              type: integer
+            totalValue:
+              type: number
+
+    Feature:
+      type: object
+      required:
+        - id
+        - type
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [ROOM, WALL, PIPE, DUCT, FIXTURE, EQUIPMENT]
+        area:
+          type: number
+          nullable: true
+          description: Area in square feet (for rooms)
+        length:
+          type: number
+          nullable: true
+          description: Length in linear feet (for walls, pipes, ducts)
+        count:
+          type: integer
+          nullable: true
+          description: Count (for fixtures)
+        props:
+          type: object
+          description: Type-specific properties
+        sheetId:
+          type: string
+
+    TakeoffResponse:
+      type: object
+      required:
+        - jobId
+        - features
+      properties:
+        jobId:
+          type: string
+        features:
+          type: array
+          items:
+            $ref: '#/components/schemas/Feature'
+        summary:
+          type: object
+          properties:
+            totalFeatures:
+              type: integer
+            byType:
+              type: object
+
+    Sheet:
+      type: object
+      required:
+        - id
+        - index
+      properties:
+        id:
+          type: string
+        index:
+          type: integer
+          description: Zero-based page number
+        name:
+          type: string
+          description: Sheet title from PDF
+        discipline:
+          type: string
+          enum: [A, P, M, E]
+          description: Detected discipline
+        scale:
+          type: string
+          description: Detected scale (e.g., "1/4\"=1'-0\"")
+        units:
+          type: string
+          enum: [ft, m]
+
+    RuleSetSummary:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        version:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    RuleSetCreate:
+      type: object
+      required:
+        - name
+        - version
+        - rules
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+        rules:
+          type: object
+          description: Rules configuration (YAML or JSON)
+
+    RuleSet:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        version:
+          type: string
+        rules:
+          type: object
+        createdAt:
+          type: string
+          format: date-time
+
+    Error:
+      type: object
+      required:
+        - statusCode
+        - message
+        - error
+      properties:
+        statusCode:
+          type: integer
+        message:
+          type: string
+        error:
+          type: string
+
+  responses:
+    BadRequest:
+      description: Bad request - invalid parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            statusCode: 400
+            message: "Invalid file format. Only PDF files are supported."
+            error: "Bad Request"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            statusCode: 404
+            message: "Job not found"
+            error: "Not Found"
+
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            statusCode: 500
+            message: "PDF processing failed: OpenAI API timeout"
+            error: "Internal Server Error"
