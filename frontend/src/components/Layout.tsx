@@ -1,7 +1,7 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import { LayoutDashboard, FolderKanban, Package, Users, Settings, Mail, LogOut } from 'lucide-react';
+import { LayoutDashboard, FolderKanban, Package, Users, Settings, Mail, LogOut, PlusCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -69,6 +69,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </div>
 
             <div className="flex items-center gap-2">
+              <Button onClick={() => navigate('/projects/new')} size="sm">
+                <PlusCircle className="w-4 h-4 mr-2" />
+                New Project
+              </Button>
               <span className={cn('px-2 py-1 rounded-full text-xs font-medium', getRoleBadgeColor(user?.role || ''))}>
                 {user?.role?.replace('_', ' ')}
               </span>

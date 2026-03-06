@@ -15,6 +15,7 @@ import RFQManagement from './pages/RFQManagement';
 import QuoteComparison from './pages/QuoteComparison';
 import Contracts from './pages/Contracts';
 import PlanViewerPage from './pages/PlanViewer';
+import ProjectWizard from './pages/ProjectWizard';
 import type { ReactNode } from 'react';
 import './App.css';
 
@@ -113,6 +114,11 @@ function App() {
             <Route path="/projects/:id/plans" element={
               <ProtectedRoute>
                 <PlanViewerPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/projects/new" element={
+              <ProtectedRoute>
+                <ProjectWizard />
               </ProtectedRoute>
             } />
           </Routes>
