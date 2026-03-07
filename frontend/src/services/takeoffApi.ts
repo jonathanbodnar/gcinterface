@@ -113,6 +113,10 @@ class TakeoffApiService {
     return this.request(`/materials/${jobId}`);
   }
 
+  async getFileInfo(fileId: string) {
+    return this.request(`/files/${fileId}`);
+  }
+
   async checkHealth() {
     const healthUrl = this.baseUrl.replace('/v1', '') + '/health';
     const response = await fetch(healthUrl);
