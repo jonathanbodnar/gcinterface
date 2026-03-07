@@ -2,66 +2,93 @@ import { useState, useEffect } from 'react';
 import { useWizard } from '../../contexts/ProjectWizardContext';
 import { takeoffApi } from '../../services/takeoffApi';
 import axios from 'axios';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Plus } from 'lucide-react';
+import { Loader2, Search, ChevronDown, ChevronRight } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
+const CATEGORY_COLORS: Record<string, string> = {
+  Flooring: 'bg-blue-100 text-blue-800',
+  Plumbing: 'bg-cyan-100 text-cyan-800',
+  HVAC: 'bg-orange-100 text-orange-800',
+  Electrical: 'bg-yellow-100 text-yellow-800',
+  Drywall: 'bg-green-100 text-green-800',
+  Painting: 'bg-purple-100 text-purple-800',
+  Doors: 'bg-pink-100 text-pink-800',
+  Windows: 'bg-indigo-100 text-indigo-800',
+  Insulation: 'bg-amber-100 text-amber-800',
+  Fixtures: 'bg-teal-100 text-teal-800',
+};
+
+function getCategoryColor(cat: string) {
+  return CATEGORY_COLORS[cat] || 'bg-gray-100 text-gray-800';
+}
+
+interface MaterialItem {
+  sku: string;
+  description: string;
+  qty: number;
+  uom: string;
+  unitPrice: number;
+  totalPrice: number;
+  category: string;
+  specifications?: Record<string, any>;
+}
+
 export default function StepReviewBOM() {
-  const { projectId, takeoffJobId, setProjectId } = useWizard();
-  const [bomItems, setBomItems] = useState<any[]>([]);
-  const [takeoffMaterials, setTakeoffMaterials] = useState<any[]>([]);
+  const { projectId, takeoffJobId, takeoffData, setProjectId } = useWizard();
+  const [materials, setMaterials] = useState<MaterialItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
+  const [search, setSearch] = useState('');
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
 
   useEffect(() => {
-    loadData();
-  }, [projectId, takeoffJobId]);
+    loadMaterials();
+  }, [takeoffJobId, projectId]);
 
-  const loadData = async () => {
+  useEffect(() => {
+    if (takeoffJobId && projectId) {
+      autoImport();
+    }
+  }, [takeoffJobId, projectId]);
+
+  const loadMaterials = async () => {
     setLoading(true);
     try {
-      // Load takeoff materials if we have a job
       if (takeoffJobId) {
-        try {
-          const matData = await takeoffApi.getMaterials(takeoffJobId);
-          setTakeoffMaterials(matData?.items || []);
-        } catch { /* takeoff materials optional */ }
-      }
-
-      // Load BOM if project already imported
-      if (projectId) {
-        const bomResponse = await axios.get(`${API_URL}/bom?projectId=${projectId}`);
-        setBomItems(bomResponse.data?.items || []);
+        const data = await takeoffApi.getMaterials(takeoffJobId);
+        setMaterials(data?.items || []);
       }
     } catch (err) {
-      console.error('Failed to load BOM data:', err);
+      console.error('Failed to load materials:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleImportProject = async () => {
-    if (!takeoffJobId) return;
+  const autoImport = async () => {
+    if (!takeoffJobId || !projectId || importing) return;
     setImporting(true);
     try {
-      const response = await axios.post(`${API_URL}/projects/import/${takeoffJobId}`, {
-        projectId: projectId || undefined,
+      await axios.post(`${API_URL}/projects/import/${takeoffJobId}`, {
+        projectId,
       });
-      const newProjectId = response.data.project?.id;
-      if (newProjectId) {
-        setProjectId(newProjectId);
-        const bomResponse = await axios.get(`${API_URL}/bom?projectId=${newProjectId}`);
-        setBomItems(bomResponse.data?.items || []);
-      }
-    } catch (err) {
-      console.error('Failed to import project:', err);
+    } catch {
+      // May already be imported
     } finally {
       setImporting(false);
     }
+  };
+
+  const toggleExpand = (idx: number) => {
+    const next = new Set(expanded);
+    next.has(idx) ? next.delete(idx) : next.add(idx);
+    setExpanded(next);
   };
 
   if (loading) {
@@ -72,104 +99,182 @@ export default function StepReviewBOM() {
     );
   }
 
-  // If no project imported yet, show import button
-  if (!projectId) {
-    return (
-      <div className="max-w-3xl mx-auto space-y-6">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Review Bill of Materials</h2>
-          <p className="text-muted-foreground">Import your takeoff data to generate the BOM</p>
-        </div>
+  // Build category list with counts
+  const categoryMap = new Map<string, number>();
+  materials.forEach((m) => {
+    const cat = m.category || 'Other';
+    categoryMap.set(cat, (categoryMap.get(cat) || 0) + 1);
+  });
+  const categories = [...categoryMap.entries()].sort((a, b) => b[1] - a[1]);
+  const totalValue = materials.reduce((s, m) => s + (m.totalPrice || 0), 0);
 
-        {takeoffMaterials.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Takeoff Materials Preview</CardTitle>
-              <CardDescription>{takeoffMaterials.length} materials extracted from plans</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="max-h-64 overflow-y-auto">
-                {takeoffMaterials.slice(0, 10).map((m: any, i: number) => (
-                  <div key={i} className="flex justify-between py-2 border-b last:border-0 text-sm">
-                    <span>{m.description}</span>
-                    <span className="text-muted-foreground">{m.qty} {m.uom}</span>
-                  </div>
-                ))}
-                {takeoffMaterials.length > 10 && (
-                  <p className="text-sm text-muted-foreground pt-2">... and {takeoffMaterials.length - 10} more</p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        )}
+  // Filter
+  const filtered = materials.filter((m) => {
+    const matchCategory = !activeCategory || m.category === activeCategory;
+    const matchSearch = !search ||
+      m.description?.toLowerCase().includes(search.toLowerCase()) ||
+      m.sku?.toLowerCase().includes(search.toLowerCase()) ||
+      m.category?.toLowerCase().includes(search.toLowerCase());
+    return matchCategory && matchSearch;
+  });
 
-        <Button onClick={handleImportProject} disabled={importing || !takeoffJobId} size="lg" className="w-full">
-          {importing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
-          Import Project & Generate BOM
-        </Button>
-      </div>
-    );
-  }
-
-  // Show BOM table
-  const trades = [...new Set(bomItems.map((item: any) => item.material?.trade || item.category?.charAt(0) || 'A'))];
-  const totalCost = bomItems.reduce((sum: number, item: any) => sum + (item.totalCost || 0), 0);
+  const fmtCurrency = (n: number) =>
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Bill of Materials</h2>
-          <p className="text-muted-foreground">{bomItems.length} items &middot; {trades.length} trades &middot; ${totalCost.toLocaleString()} estimated</p>
+      <div>
+        <h2 className="text-2xl font-bold tracking-tight">Bill of Materials</h2>
+        <p className="text-muted-foreground">
+          {materials.length} items across {categories.length} categories &middot; {fmtCurrency(totalValue)} estimated
+        </p>
+      </div>
+
+      <div className="flex flex-col lg:flex-row gap-6">
+        {/* Category Sidebar */}
+        <div className="lg:w-64 flex-shrink-0">
+          <Card>
+            <CardContent className="p-3">
+              <button
+                onClick={() => setActiveCategory(null)}
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-md text-sm font-medium transition-colors ${
+                  !activeCategory ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
+                }`}
+              >
+                <span>All Materials</span>
+                <Badge variant="secondary" className={!activeCategory ? 'bg-primary-foreground/20 text-primary-foreground' : ''}>
+                  {materials.length}
+                </Badge>
+              </button>
+              <div className="mt-1 space-y-0.5">
+                {categories.map(([cat, count]) => (
+                  <button
+                    key={cat}
+                    onClick={() => setActiveCategory(activeCategory === cat ? null : cat)}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-sm transition-colors ${
+                      activeCategory === cat ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
+                    }`}
+                  >
+                    <span className="truncate">{cat}</span>
+                    <Badge variant="secondary" className={`ml-2 flex-shrink-0 ${activeCategory === cat ? 'bg-primary-foreground/20 text-primary-foreground' : ''}`}>
+                      {count}
+                    </Badge>
+                  </button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Materials List */}
+        <div className="flex-1 min-w-0 space-y-4">
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Search materials by name, SKU, or category..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+
+          {/* Summary Cards */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-muted/50 rounded-lg p-3 text-center">
+              <div className="text-xl font-bold">{filtered.length}</div>
+              <div className="text-xs text-muted-foreground">Items</div>
+            </div>
+            <div className="bg-muted/50 rounded-lg p-3 text-center">
+              <div className="text-xl font-bold">{activeCategory ? 1 : categories.length}</div>
+              <div className="text-xs text-muted-foreground">{activeCategory ? 'Category' : 'Categories'}</div>
+            </div>
+            <div className="bg-muted/50 rounded-lg p-3 text-center">
+              <div className="text-xl font-bold">{fmtCurrency(filtered.reduce((s, m) => s + (m.totalPrice || 0), 0))}</div>
+              <div className="text-xs text-muted-foreground">Est. Value</div>
+            </div>
+          </div>
+
+          {/* Materials Table */}
+          <Card>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-10"></TableHead>
+                      <TableHead className="min-w-[250px]">Description</TableHead>
+                      <TableHead className="whitespace-nowrap">Category</TableHead>
+                      <TableHead className="whitespace-nowrap text-right">Qty</TableHead>
+                      <TableHead className="whitespace-nowrap">UOM</TableHead>
+                      <TableHead className="whitespace-nowrap text-right">Unit Price</TableHead>
+                      <TableHead className="whitespace-nowrap text-right">Total</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filtered.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                          {search ? 'No materials match your search' : 'No materials found'}
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filtered.map((item, idx) => {
+                        const globalIdx = materials.indexOf(item);
+                        const isExpanded = expanded.has(globalIdx);
+                        return (
+                          <TableRow
+                            key={globalIdx}
+                            className="cursor-pointer hover:bg-muted/50"
+                            onClick={() => toggleExpand(globalIdx)}
+                          >
+                            <TableCell className="w-10 px-3">
+                              {isExpanded ? (
+                                <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                              ) : (
+                                <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <div className="font-medium">{item.description}</div>
+                              {item.sku && <div className="text-xs text-muted-foreground">{item.sku}</div>}
+                              {isExpanded && item.specifications && (
+                                <div className="mt-3 p-3 bg-muted/30 rounded-md text-xs space-y-1">
+                                  {Object.entries(item.specifications).map(([k, v]) => (
+                                    <div key={k} className="flex gap-2">
+                                      <span className="text-muted-foreground capitalize font-medium min-w-[100px]">{k}:</span>
+                                      <span>{String(v)}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap">
+                              <Badge className={getCategoryColor(item.category)}>
+                                {item.category}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap text-right font-medium">
+                              {new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(item.qty)}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap text-muted-foreground">{item.uom}</TableCell>
+                            <TableCell className="whitespace-nowrap text-right">
+                              {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(item.unitPrice)}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap text-right font-semibold">
+                              {fmtCurrency(item.totalPrice)}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
-
-      {/* Summary by Trade */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {trades.map((trade) => {
-          const items = bomItems.filter((i: any) => (i.material?.trade || i.category?.charAt(0) || 'A') === trade);
-          const cost = items.reduce((s: number, i: any) => s + (i.totalCost || 0), 0);
-          return (
-            <Card key={trade}>
-              <CardContent className="pt-6">
-                <Badge className="mb-2">{trade}</Badge>
-                <div className="text-2xl font-bold">{items.length}</div>
-                <div className="text-sm text-muted-foreground">${cost.toLocaleString()}</div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-
-      {/* BOM Table */}
-      <Card>
-        <CardContent className="pt-6">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Description</TableHead>
-                <TableHead>Trade</TableHead>
-                <TableHead className="text-right">Qty</TableHead>
-                <TableHead>UOM</TableHead>
-                <TableHead className="text-right">Unit Cost</TableHead>
-                <TableHead className="text-right">Total</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {bomItems.map((item: any) => (
-                <TableRow key={item.id}>
-                  <TableCell className="font-medium">{item.description}</TableCell>
-                  <TableCell><Badge variant="outline">{item.material?.trade || 'A'}</Badge></TableCell>
-                  <TableCell className="text-right">{item.finalQty?.toFixed(2)}</TableCell>
-                  <TableCell>{item.uom}</TableCell>
-                  <TableCell className="text-right">${(item.unitCost || 0).toFixed(2)}</TableCell>
-                  <TableCell className="text-right font-semibold">${(item.totalCost || 0).toLocaleString()}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
     </div>
   );
 }

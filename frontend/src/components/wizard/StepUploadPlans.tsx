@@ -4,7 +4,7 @@ import { takeoffApi } from '../../services/takeoffApi';
 import axios from 'axios';
 import PlanUpload from '../takeoff/PlanUpload';
 import JobProgress from '../takeoff/JobProgress';
-import TakeoffResults from '../takeoff/TakeoffResults';
+import { CheckCircle2 } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -90,15 +90,36 @@ export default function StepUploadPlans() {
     }, 5000);
   };
 
-  // Show results if we have them
+  // Show success summary when analysis is done
   if (takeoffData) {
+    const counts = [
+      { label: 'Rooms', value: takeoffData.rooms?.length || 0 },
+      { label: 'Walls', value: takeoffData.walls?.length || 0 },
+      { label: 'Pipes', value: takeoffData.pipes?.length || 0 },
+      { label: 'Ducts', value: takeoffData.ducts?.length || 0 },
+      { label: 'Fixtures', value: takeoffData.fixtures?.length || 0 },
+    ].filter(c => c.value > 0);
+
     return (
-      <div className="space-y-6">
-        <div>
+      <div className="max-w-3xl mx-auto space-y-6">
+        <div className="text-center py-8">
+          <CheckCircle2 className="w-16 h-16 text-green-600 mx-auto mb-4" />
           <h2 className="text-2xl font-bold tracking-tight">Plan Analysis Complete</h2>
-          <p className="text-muted-foreground">Review the extracted data below, then proceed to the next step</p>
+          <p className="text-muted-foreground mt-2">
+            {counts.map(c => `${c.value} ${c.label.toLowerCase()}`).join(', ')} extracted
+          </p>
         </div>
-        <TakeoffResults data={takeoffData} />
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          {counts.map(c => (
+            <div key={c.label} className="bg-muted/50 rounded-lg p-4 text-center">
+              <div className="text-2xl font-bold">{c.value}</div>
+              <div className="text-sm text-muted-foreground">{c.label}</div>
+            </div>
+          ))}
+        </div>
+        <p className="text-center text-sm text-muted-foreground">
+          Click <span className="font-medium text-foreground">Next Step</span> to review the full Bill of Materials
+        </p>
       </div>
     );
   }
