@@ -80,6 +80,7 @@ export default function StepReviewBOM() {
   const [showPlanViewer, setShowPlanViewer] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
 
   const [newItem, setNewItem] = useState<Partial<MaterialItem>>({
@@ -140,37 +141,54 @@ export default function StepReviewBOM() {
       setShowPlanViewer(true);
       return;
     }
+    setPdfError(null);
     setPdfLoading(true);
+    setShowPlanViewer(true);
     try {
       // Try direct file ID first
       let fileId = takeoffFileId;
 
       // If no fileId cached, get it from the job record
       if (!fileId && takeoffJobId) {
-        const jobStatus = await takeoffApi.getJobStatus(takeoffJobId);
-        fileId = jobStatus?.fileId || null;
+        try {
+          const jobStatus = await takeoffApi.getJobStatus(takeoffJobId);
+          fileId = jobStatus?.fileId || null;
+        } catch {
+          // job status fetch failed, continue to fallback
+        }
       }
 
       if (fileId) {
-        const fileInfo = await takeoffApi.getFileInfo(fileId);
-        if (fileInfo?.downloadUrl) {
-          setPdfUrl(fileInfo.downloadUrl);
-          setShowPlanViewer(true);
-          return;
+        try {
+          const fileInfo = await takeoffApi.getFileInfo(fileId);
+          if (fileInfo?.downloadUrl) {
+            setPdfUrl(fileInfo.downloadUrl);
+            return;
+          }
+        } catch {
+          // file info fetch failed, continue to fallback
         }
       }
 
       // Fallback: try plan pages from the project
       if (projectId) {
-        const res = await axios.get(`${API_URL}/projects/${projectId}`);
-        const planPages = res.data?.planPages;
-        if (planPages?.length > 0) {
-          setPdfUrl(planPages[0].pdfUrl);
-          setShowPlanViewer(true);
+        try {
+          const res = await axios.get(`${API_URL}/projects/${projectId}`);
+          const planPages = res.data?.planPages;
+          if (planPages?.length > 0) {
+            setPdfUrl(planPages[0].pdfUrl);
+            return;
+          }
+        } catch {
+          // plan pages fetch failed
         }
       }
-    } catch (err) {
+
+      // If we got here, no PDF was found through any method
+      setPdfError('Could not load PDF. The file endpoint may need to be deployed.');
+    } catch (err: any) {
       console.error('Failed to load PDF:', err);
+      setPdfError(err?.message || 'Failed to load PDF');
     } finally {
       setPdfLoading(false);
     }
@@ -663,7 +681,14 @@ export default function StepReviewBOM() {
             <DialogDescription>Review your uploaded construction documents</DialogDescription>
           </DialogHeader>
           <div className="flex-1 min-h-0 px-6 pb-6">
-            {pdfUrl ? (
+            {pdfLoading ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center">
+                  <Loader2 className="w-10 h-10 animate-spin text-muted-foreground mx-auto mb-4" />
+                  <p className="text-muted-foreground">Loading PDF...</p>
+                </div>
+              </div>
+            ) : pdfUrl ? (
               <iframe
                 src={pdfUrl}
                 className="w-full h-full rounded-md border"
@@ -673,7 +698,19 @@ export default function StepReviewBOM() {
               <div className="flex items-center justify-center h-full text-muted-foreground">
                 <div className="text-center">
                   <FileText className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                  <p>No PDF available for this project</p>
+                  <p>{pdfError || 'No PDF available for this project'}</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-4"
+                    onClick={() => {
+                      setPdfUrl(null);
+                      setPdfError(null);
+                      loadPdfUrl();
+                    }}
+                  >
+                    Retry
+                  </Button>
                 </div>
               </div>
             )}
