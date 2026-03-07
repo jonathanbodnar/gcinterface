@@ -24,9 +24,10 @@ function getStatusColor(status: string) {
   return colors[status] || 'bg-gray-100 text-gray-800';
 }
 
-function getWizardStep(status: string) {
+function getWizardStep(project: any) {
+  if (project.wizardStep) return project.wizardStep;
   const map: Record<string, string> = {
-    SCOPE_DIAGNOSIS: 'review',
+    SCOPE_DIAGNOSIS: project.takeoffJobId ? 'review' : 'upload',
     BOM_GENERATION: 'review',
     VENDOR_MATCHING: 'vendors',
     RFQ_SENT: 'rfqs',
@@ -34,7 +35,7 @@ function getWizardStep(status: string) {
     AWARD_PENDING: 'dashboard',
     AWARDED: 'dashboard',
   };
-  return map[status] || 'dashboard';
+  return map[project.status] || 'dashboard';
 }
 
 export default function Projects() {
@@ -146,7 +147,7 @@ export default function Projects() {
                             variant="ghost"
                             onClick={(e) => {
                               e.stopPropagation();
-                              navigate(`/projects/new?resume=${project.id}&step=${getWizardStep(project.status)}`);
+                              navigate(`/projects/new?resume=${project.id}&step=${getWizardStep(project)}`);
                             }}
                           >
                             <PlayCircle className="w-4 h-4" />
