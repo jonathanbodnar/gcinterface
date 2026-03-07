@@ -142,13 +142,26 @@ export default function StepReviewBOM() {
     }
     setPdfLoading(true);
     try {
-      if (takeoffFileId) {
-        const fileInfo = await takeoffApi.getFileInfo(takeoffFileId);
+      // Try direct file ID first
+      let fileId = takeoffFileId;
+
+      // If no fileId cached, get it from the job record
+      if (!fileId && takeoffJobId) {
+        const jobStatus = await takeoffApi.getJobStatus(takeoffJobId);
+        fileId = jobStatus?.fileId || null;
+      }
+
+      if (fileId) {
+        const fileInfo = await takeoffApi.getFileInfo(fileId);
         if (fileInfo?.downloadUrl) {
           setPdfUrl(fileInfo.downloadUrl);
           setShowPlanViewer(true);
+          return;
         }
-      } else if (projectId) {
+      }
+
+      // Fallback: try plan pages from the project
+      if (projectId) {
         const res = await axios.get(`${API_URL}/projects/${projectId}`);
         const planPages = res.data?.planPages;
         if (planPages?.length > 0) {
@@ -342,7 +355,7 @@ export default function StepReviewBOM() {
             variant="outline"
             size="sm"
             onClick={loadPdfUrl}
-            disabled={pdfLoading || (!takeoffFileId && !projectId)}
+            disabled={pdfLoading || (!takeoffFileId && !takeoffJobId && !projectId)}
           >
             {pdfLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileText className="w-4 h-4 mr-2" />}
             View Plans
