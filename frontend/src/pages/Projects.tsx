@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import axios from 'axios';
+import { takeoffApi } from '../services/takeoffApi';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -22,6 +23,54 @@ function getStatusColor(status: string) {
     CANCELLED: 'bg-gray-100 text-gray-800',
   };
   return colors[status] || 'bg-gray-100 text-gray-800';
+}
+
+function AnalysisProgress({ takeoffJobId }: { takeoffJobId: string }) {
+  const [progress, setProgress] = useState(0);
+  const [status, setStatus] = useState('PROCESSING');
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    const poll = async () => {
+      try {
+        const data = await takeoffApi.getJobStatus(takeoffJobId);
+        setProgress(data.progress || 0);
+        setStatus(data.status || 'PROCESSING');
+        if (data.status === 'COMPLETED' || data.status === 'FAILED' || data.status === 'CANCELLED') {
+          if (pollRef.current) clearInterval(pollRef.current);
+        }
+      } catch { /* ignore */ }
+    };
+    poll();
+    pollRef.current = setInterval(poll, 5000);
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [takeoffJobId]);
+
+  if (status === 'COMPLETED') {
+    return <Badge className="bg-green-100 text-green-800">ANALYSIS COMPLETE</Badge>;
+  }
+  if (status === 'FAILED') {
+    return <Badge className="bg-red-100 text-red-800">ANALYSIS FAILED</Badge>;
+  }
+
+  const label = progress < 20 ? 'Ingesting...' :
+                progress < 50 ? 'Analyzing...' :
+                progress < 80 ? 'Extracting...' : 'Finishing...';
+
+  return (
+    <div className="min-w-[140px]">
+      <div className="flex items-center justify-between text-xs mb-1">
+        <span className="text-blue-700 font-medium">{label}</span>
+        <span className="text-muted-foreground">{Math.round(progress)}%</span>
+      </div>
+      <div className="h-2 w-full bg-blue-100 rounded-full overflow-hidden">
+        <div
+          className="h-full bg-blue-600 rounded-full transition-all duration-500"
+          style={{ width: `${Math.min(progress, 100)}%` }}
+        />
+      </div>
+    </div>
+  );
 }
 
 function getWizardStep(project: any) {
@@ -132,9 +181,13 @@ export default function Projects() {
                           <div className="text-sm text-muted-foreground">{project.location || 'No location'}</div>
                         </TableCell>
                         <TableCell className="whitespace-nowrap">
-                          <Badge className={getStatusColor(project.status)}>
-                            {project.status?.replace(/_/g, ' ')}
-                          </Badge>
+                          {project.takeoffJobId && project.status === 'SCOPE_DIAGNOSIS' ? (
+                            <AnalysisProgress takeoffJobId={project.takeoffJobId} />
+                          ) : (
+                            <Badge className={getStatusColor(project.status)}>
+                              {project.status?.replace(/_/g, ' ')}
+                            </Badge>
+                          )}
                         </TableCell>
                         <TableCell className="whitespace-nowrap text-muted-foreground">{formatDate(project.dueDate)}</TableCell>
                         <TableCell className="whitespace-nowrap text-right">{project.totalSF ? Number(project.totalSF).toLocaleString() : '-'}</TableCell>
