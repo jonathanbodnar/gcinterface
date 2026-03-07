@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { FolderKanban, Loader2, Trash2, PlayCircle, PlusCircle } from 'lucide-react';
+import { FolderKanban, Loader2, Trash2, PlusCircle } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -107,65 +107,68 @@ export default function Projects() {
                 </Button>
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Project Name</TableHead>
-                    <TableHead>Location</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Due Date</TableHead>
-                    <TableHead className="text-right">Area (SF)</TableHead>
-                    <TableHead className="text-right">RFQs</TableHead>
-                    <TableHead>Created</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {projects.map((project: any) => (
-                    <TableRow
-                      key={project.id}
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => navigate(`/projects/${project.id}`)}
-                    >
-                      <TableCell className="font-semibold">{project.name}</TableCell>
-                      <TableCell className="text-muted-foreground">{project.location || '-'}</TableCell>
-                      <TableCell>
-                        <Badge className={getStatusColor(project.status)}>
-                          {project.status?.replace(/_/g, ' ')}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">{formatDate(project.dueDate)}</TableCell>
-                      <TableCell className="text-right">{project.totalSF?.toFixed(0) || '-'}</TableCell>
-                      <TableCell className="text-right">
-                        {project.rfqsSent > 0 ? `${project.rfqsSent}/${project.quotesReceived || 0}` : '-'}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">{formatDate(project.createdAt)}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex gap-1 justify-end">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigate(`/projects/new?resume=${project.id}&step=${getWizardStep(project)}`);
-                            }}
-                          >
-                            <PlayCircle className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="text-destructive hover:text-destructive"
-                            onClick={(e) => deleteProject(project.id, e)}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="min-w-[240px]">Project</TableHead>
+                      <TableHead className="whitespace-nowrap">Status</TableHead>
+                      <TableHead className="whitespace-nowrap">Due Date</TableHead>
+                      <TableHead className="whitespace-nowrap text-right">Area (SF)</TableHead>
+                      <TableHead className="whitespace-nowrap text-right">RFQs</TableHead>
+                      <TableHead className="whitespace-nowrap">Created</TableHead>
+                      <TableHead className="whitespace-nowrap text-right min-w-[180px]">Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {projects.map((project: any) => (
+                      <TableRow
+                        key={project.id}
+                        className="cursor-pointer hover:bg-muted/50"
+                        onClick={() => navigate(`/projects/${project.id}`)}
+                      >
+                        <TableCell>
+                          <div className="font-semibold">{project.name}</div>
+                          <div className="text-sm text-muted-foreground">{project.location || 'No location'}</div>
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          <Badge className={getStatusColor(project.status)}>
+                            {project.status?.replace(/_/g, ' ')}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap text-muted-foreground">{formatDate(project.dueDate)}</TableCell>
+                        <TableCell className="whitespace-nowrap text-right">{project.totalSF ? Number(project.totalSF).toLocaleString() : '-'}</TableCell>
+                        <TableCell className="whitespace-nowrap text-right">
+                          {project.rfqsSent > 0 ? `${project.rfqsSent}/${project.quotesReceived || 0}` : '-'}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap text-muted-foreground">{formatDate(project.createdAt)}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex gap-2 justify-end">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/projects/new?resume=${project.id}&step=${getWizardStep(project)}`);
+                              }}
+                            >
+                              Continue
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                              onClick={(e) => deleteProject(project.id, e)}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </CardContent>
         </Card>
