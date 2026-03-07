@@ -84,7 +84,7 @@ export class ProjectsController {
   async getTakeoffFileUrl(@Param('takeoffJobId') takeoffJobId: string) {
     try {
       const rows: any[] = await this.takeoffPrisma.$queryRaw`
-        SELECT f."storageUrl", f.filename, f.mime, f.pages
+        SELECT f.id as "fileId", f."storageUrl", f.filename, f.mime, f.pages
         FROM "jobs" j
         JOIN "files" f ON j."fileId" = f.id
         WHERE j.id = ${takeoffJobId}
@@ -96,6 +96,7 @@ export class ProjectsController {
       }
 
       return {
+        fileId: rows[0].fileId,
         storageUrl: rows[0].storageUrl,
         filename: rows[0].filename,
         mime: rows[0].mime,

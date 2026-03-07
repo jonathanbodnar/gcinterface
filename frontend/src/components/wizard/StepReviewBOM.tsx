@@ -145,27 +145,18 @@ export default function StepReviewBOM() {
     setPdfLoading(true);
     setShowPlanViewer(true);
     try {
-      // Primary: get file URL from gcinterface backend (queries takeoff DB directly)
-      if (takeoffJobId) {
+      // Get the fileId from the takeoff job, then get a presigned URL
+      let fileId = takeoffFileId;
+
+      if (!fileId && takeoffJobId) {
+        // Get fileId from gcinterface backend (queries takeoff DB)
         try {
           const res = await axios.get(`${API_URL}/projects/takeoff-file/${takeoffJobId}`);
-          if (res.data?.storageUrl) {
-            setPdfUrl(res.data.storageUrl);
-            return;
-          }
-        } catch {
-          // endpoint failed, try fallbacks
-        }
-      }
-
-      // Fallback: try takeoff API file endpoint
-      let fileId = takeoffFileId;
-      if (!fileId && takeoffJobId) {
-        try {
-          const jobStatus = await takeoffApi.getJobStatus(takeoffJobId);
-          fileId = jobStatus?.fileId || null;
+          fileId = res.data?.fileId || null;
         } catch { /* continue */ }
       }
+
+      // Use takeoff API to get presigned download URL
       if (fileId) {
         try {
           const fileInfo = await takeoffApi.getFileInfo(fileId);
