@@ -10,7 +10,7 @@ export class ProjectsService {
     private bomGenerator: BOMGeneratorService,
   ) {}
 
-  async importFromTakeoff(takeoffJobId: string, userId: string) {
+  async importFromTakeoff(takeoffJobId: string, userId: string, existingProjectId?: string) {
     // Get job data from takeoff database (READ ONLY)
     if (!this.takeoffPrisma.client) {
       throw new NotFoundException('Takeoff database not configured');
@@ -41,24 +41,34 @@ export class ProjectsService {
       console.warn('Could not calculate total SF:', error.message);
     }
 
-    // Create project in GC Interface database
-    // Use job name or generate a default name
-    const projectName = (jobData as any).name || 
-                        (jobData as any).filename?.replace(/\.[^/.]+$/, '') || 
-                        `Project ${takeoffJobId.substring(0, 8)}`;
-    
-    const project = await this.prisma.project.create({
-      data: {
-        name: projectName,
-        location: 'To be determined',
-        takeoffJobId: takeoffJobId,
-        status: 'SCOPE_DIAGNOSIS',
-        createdById: userId,
-        totalSF: totalSF,
-      },
-    });
-
-    console.log(`✅ Created project: ${projectName}`);
+    let project;
+    if (existingProjectId) {
+      project = await this.prisma.project.update({
+        where: { id: existingProjectId },
+        data: {
+          takeoffJobId,
+          totalSF,
+          status: 'SCOPE_DIAGNOSIS',
+        },
+      });
+      console.log(`✅ Linked takeoff job ${takeoffJobId} to existing project ${project.id}`);
+    } else {
+      const projectName = (jobData as any).name || 
+                          (jobData as any).filename?.replace(/\.[^/.]+$/, '') || 
+                          `Project ${takeoffJobId.substring(0, 8)}`;
+      
+      project = await this.prisma.project.create({
+        data: {
+          name: projectName,
+          location: 'To be determined',
+          takeoffJobId,
+          status: 'SCOPE_DIAGNOSIS',
+          createdById: userId,
+          totalSF,
+        },
+      });
+      console.log(`✅ Created project: ${projectName}`);
+    }
 
     console.log(`✅ Imported takeoff job ${takeoffJobId} as project ${project.id}`);
     console.log(`📐 Total SF: ${totalSF}`);

@@ -48,11 +48,12 @@ export default function StepReviewBOM() {
     if (!takeoffJobId) return;
     setImporting(true);
     try {
-      const response = await axios.post(`${API_URL}/projects/import/${takeoffJobId}`);
+      const response = await axios.post(`${API_URL}/projects/import/${takeoffJobId}`, {
+        projectId: projectId || undefined,
+      });
       const newProjectId = response.data.project?.id;
       if (newProjectId) {
         setProjectId(newProjectId);
-        // Reload BOM after import
         const bomResponse = await axios.get(`${API_URL}/bom?projectId=${newProjectId}`);
         setBomItems(bomResponse.data?.items || []);
       }

@@ -1,12 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 import { useWizard } from '../../contexts/ProjectWizardContext';
 import { takeoffApi } from '../../services/takeoffApi';
+import axios from 'axios';
 import PlanUpload from '../takeoff/PlanUpload';
 import JobProgress from '../takeoff/JobProgress';
 import TakeoffResults from '../takeoff/TakeoffResults';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+
 export default function StepUploadPlans() {
-  const { setupData, takeoffJobId, takeoffData, setTakeoffJobId, setTakeoffFileId, setTakeoffData } = useWizard();
+  const { projectId, setupData, takeoffJobId, takeoffData, setTakeoffJobId, setTakeoffFileId, setTakeoffData } = useWizard();
   const [isUploading, setIsUploading] = useState(false);
   const [jobStatus, setJobStatus] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
@@ -37,6 +40,12 @@ export default function StepUploadPlans() {
       });
 
       setTakeoffJobId(jobResult.jobId);
+      // Link takeoff job to project
+      if (projectId) {
+        try {
+          await axios.put(`${API_URL}/projects/${projectId}`, { takeoffJobId: jobResult.jobId });
+        } catch { /* non-critical */ }
+      }
       setJobStatus({ status: 'QUEUED', progress: 0 });
       startPolling(jobResult.jobId);
     } catch (err: any) {

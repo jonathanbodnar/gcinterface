@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Body, Param, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Request, HttpException, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { ProjectsService } from './projects.service';
 import { PrismaService } from '@/common/prisma/prisma.service';
@@ -14,10 +14,62 @@ export class ProjectsController {
     private prisma: PrismaService,
   ) {}
 
+  @Post()
+  @ApiOperation({ summary: 'Create a new project' })
+  async createProject(@Body() body: {
+    name: string;
+    location?: string;
+    clientName?: string;
+    dueDate?: string;
+    notes?: string;
+    wizardStep?: string;
+  }, @Request() req) {
+    const project = await this.prisma.project.create({
+      data: {
+        name: body.name,
+        location: body.location || 'To be determined',
+        clientName: body.clientName || null,
+        dueDate: body.dueDate ? new Date(body.dueDate) : null,
+        notes: body.notes || null,
+        wizardStep: body.wizardStep || 'setup',
+        status: 'SCOPE_DIAGNOSIS',
+        createdById: req.user.userId,
+      },
+    });
+    return project;
+  }
+
+  @Put(':id')
+  @ApiOperation({ summary: 'Update a project' })
+  async updateProject(@Param('id') id: string, @Body() body: any) {
+    const data: any = {};
+    if (body.name !== undefined) data.name = body.name;
+    if (body.location !== undefined) data.location = body.location;
+    if (body.clientName !== undefined) data.clientName = body.clientName;
+    if (body.dueDate !== undefined) data.dueDate = body.dueDate ? new Date(body.dueDate) : null;
+    if (body.notes !== undefined) data.notes = body.notes;
+    if (body.wizardStep !== undefined) data.wizardStep = body.wizardStep;
+    if (body.status !== undefined) data.status = body.status;
+    if (body.takeoffJobId !== undefined) data.takeoffJobId = body.takeoffJobId;
+    if (body.projectOutcome !== undefined) data.projectOutcome = body.projectOutcome;
+    if (body.currentStage !== undefined) data.currentStage = body.currentStage;
+    if (body.totalSF !== undefined) data.totalSF = body.totalSF;
+
+    const project = await this.prisma.project.update({
+      where: { id },
+      data,
+    });
+    return project;
+  }
+
   @Post('import/:takeoffJobId')
   @ApiOperation({ summary: 'Import project from takeoff database' })
-  async importFromTakeoff(@Param('takeoffJobId') takeoffJobId: string, @Request() req) {
-    return this.projectsService.importFromTakeoff(takeoffJobId, req.user.userId);
+  async importFromTakeoff(
+    @Param('takeoffJobId') takeoffJobId: string,
+    @Body() body: { projectId?: string },
+    @Request() req,
+  ) {
+    return this.projectsService.importFromTakeoff(takeoffJobId, req.user.userId, body?.projectId);
   }
 
   @Get('available-takeoff-jobs')
@@ -49,8 +101,38 @@ export class ProjectsController {
   @Delete(':id')
   @ApiOperation({ summary: 'Delete a project and all related data' })
   async deleteProject(@Param('id') id: string) {
-    await this.prisma.project.delete({ where: { id } });
-    return { success: true, message: 'Project deleted' };
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        // Delete in order to respect foreign keys
+        await tx.featureLocation.deleteMany({ where: { projectId: id } });
+        await tx.planPage.deleteMany({ where: { projectId: id } });
+        const rfqs = await tx.rFQ.findMany({ where: { projectId: id }, select: { id: true } });
+        const rfqIds = rfqs.map(r => r.id);
+        if (rfqIds.length > 0) {
+          await tx.quoteItem.deleteMany({ where: { quote: { rfqId: { in: rfqIds } } } });
+          await tx.quote.deleteMany({ where: { rfqId: { in: rfqIds } } });
+          await tx.rFQItem.deleteMany({ where: { rfqId: { in: rfqIds } } });
+        }
+        await tx.rFQ.deleteMany({ where: { projectId: id } });
+        await tx.subcontract.deleteMany({ where: { projectId: id } });
+        const boms = await tx.bOM.findMany({ where: { projectId: id }, select: { id: true } });
+        const bomIds = boms.map(b => b.id);
+        if (bomIds.length > 0) {
+          await tx.rFQItem.deleteMany({ where: { bomItemId: { in: bomIds } } });
+          await tx.quoteItem.deleteMany({ where: { bomItemId: { in: bomIds } } });
+        }
+        await tx.bOM.deleteMany({ where: { projectId: id } });
+        await tx.estimate.deleteMany({ where: { projectId: id } });
+        await tx.project.delete({ where: { id } });
+      });
+      return { success: true, message: 'Project deleted' };
+    } catch (error) {
+      console.error('Failed to delete project:', error);
+      throw new HttpException(
+        `Failed to delete project: ${error.message}`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 
   @Post(':id/selected-vendors')

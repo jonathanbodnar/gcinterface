@@ -54,13 +54,17 @@ model Project {
   clientName String? // Deprecated: use client.name instead
   totalSF    Float?
 
-  // Link to takeoff database job
-  takeoffJobId String @unique // Job ID from gclegacy takeoff database
+  // Link to takeoff database job (optional until plans are uploaded)
+  takeoffJobId String? @unique // Job ID from gclegacy takeoff database
 
   // Project details
-  planDate DateTime?
-  bidDate  DateTime?
-  dueDate  DateTime? // Admin-set deadline
+  planDate  DateTime?
+  bidDate   DateTime?
+  dueDate   DateTime? // Admin-set deadline
+  notes     String?
+
+  // Wizard tracking
+  wizardStep String? // Current wizard step for resume
 
   // Workflow status
   status ProjectStatus @default(SCOPE_DIAGNOSIS)

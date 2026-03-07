@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useWizard, WIZARD_STEPS } from '../../contexts/ProjectWizardContext';
 import { Button } from '@/components/ui/button';
-import { Check, ChevronLeft, ChevronRight, RotateCcw, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, RotateCcw, X, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface WizardLayoutProps {
@@ -10,7 +10,7 @@ interface WizardLayoutProps {
 
 export default function WizardLayout({ children }: WizardLayoutProps) {
   const navigate = useNavigate();
-  const { currentStep, nextStep, prevStep, canProceed, resetWizard, setStep } = useWizard();
+  const { currentStep, nextStep, prevStep, canProceed, resetWizard, setStep, saving } = useWizard();
   const currentIndex = WIZARD_STEPS.findIndex((s) => s.id === currentStep);
   const isFirst = currentIndex === 0;
   const isLast = currentIndex === WIZARD_STEPS.length - 1;
@@ -27,7 +27,9 @@ export default function WizardLayout({ children }: WizardLayoutProps) {
                 <RotateCcw className="w-4 h-4 mr-2" />
                 Start Over
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => navigate('/projects')}>
+              <Button variant="ghost" size="sm" onClick={() => {
+                navigate('/projects');
+              }}>
                 <X className="w-4 h-4 mr-2" />
                 Exit
               </Button>
@@ -96,9 +98,10 @@ export default function WizardLayout({ children }: WizardLayoutProps) {
             Previous
           </Button>
           {!isLast && (
-            <Button onClick={nextStep} disabled={!canProceed}>
-              Next Step
-              <ChevronRight className="w-4 h-4 ml-2" />
+            <Button onClick={nextStep} disabled={!canProceed || saving}>
+              {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              {saving ? 'Saving...' : 'Next Step'}
+              {!saving && <ChevronRight className="w-4 h-4 ml-2" />}
             </Button>
           )}
         </div>

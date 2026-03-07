@@ -1,4 +1,8 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, type ReactNode } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import axios from 'axios';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 export type WizardStep = 'setup' | 'upload' | 'review' | 'vendors' | 'rfqs' | 'dashboard';
 
@@ -41,6 +45,7 @@ interface WizardContextType extends WizardState {
   setSetupData: (data: Partial<ProjectSetupData>) => void;
   resetWizard: () => void;
   canProceed: boolean;
+  saving: boolean;
 }
 
 const defaultSetupData: ProjectSetupData = {
@@ -74,6 +79,40 @@ const WizardContext = createContext<WizardContextType | undefined>(undefined);
 
 export function ProjectWizardProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<WizardState>(loadState);
+  const [saving, setSaving] = useState(false);
+  const [searchParams] = useSearchParams();
+  const resumeLoaded = useRef(false);
+
+  // Handle resume from query params (?resume=projectId&step=stepName)
+  useEffect(() => {
+    if (resumeLoaded.current) return;
+    const resumeId = searchParams.get('resume');
+    const resumeStep = searchParams.get('step') as WizardStep | null;
+    if (!resumeId) return;
+
+    resumeLoaded.current = true;
+    axios.get(`${API_URL}/projects/${resumeId}`).then((res) => {
+      const project = res.data.project || res.data;
+      setState({
+        currentStep: resumeStep || (project.wizardStep as WizardStep) || 'setup',
+        projectId: project.id,
+        takeoffJobId: project.takeoffJobId || null,
+        takeoffFileId: null,
+        takeoffData: null,
+        setupData: {
+          name: project.name || '',
+          clientName: project.clientName || '',
+          location: project.location || '',
+          notes: project.notes || '',
+          dueDate: project.dueDate ? project.dueDate.split('T')[0] : '',
+          disciplines: ['A', 'P', 'M', 'E'],
+          targets: ['rooms', 'walls', 'doors', 'windows', 'pipes', 'ducts', 'fixtures'],
+        },
+      });
+    }).catch((err) => {
+      console.error('Failed to load project for resume:', err);
+    });
+  }, [searchParams]);
 
   useEffect(() => {
     const { takeoffData, ...saveable } = state;
@@ -85,21 +124,63 @@ export function ProjectWizardProvider({ children }: { children: ReactNode }) {
   const setStep = (step: WizardStep) =>
     setState((prev) => ({ ...prev, currentStep: step }));
 
-  const nextStep = () => {
-    if (stepIndex < WIZARD_STEPS.length - 1) {
-      setState((prev) => ({
-        ...prev,
-        currentStep: WIZARD_STEPS[stepIndex + 1].id,
-      }));
+  const saveProjectToServer = async (nextStepId: WizardStep) => {
+    setSaving(true);
+    try {
+      if (!state.projectId) {
+        const res = await axios.post(`${API_URL}/projects`, {
+          name: state.setupData.name,
+          location: state.setupData.location || undefined,
+          clientName: state.setupData.clientName || undefined,
+          dueDate: state.setupData.dueDate || undefined,
+          notes: state.setupData.notes || undefined,
+          wizardStep: nextStepId,
+        });
+        setState((prev) => ({ ...prev, projectId: res.data.id, currentStep: nextStepId }));
+      } else {
+        await axios.put(`${API_URL}/projects/${state.projectId}`, {
+          name: state.setupData.name,
+          location: state.setupData.location || undefined,
+          clientName: state.setupData.clientName || undefined,
+          dueDate: state.setupData.dueDate || undefined,
+          notes: state.setupData.notes || undefined,
+          wizardStep: nextStepId,
+        });
+        setState((prev) => ({ ...prev, currentStep: nextStepId }));
+      }
+    } catch (err) {
+      console.error('Failed to save project:', err);
+      setState((prev) => ({ ...prev, currentStep: nextStepId }));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updateWizardStep = async (stepId: WizardStep) => {
+    if (state.projectId) {
+      try {
+        await axios.put(`${API_URL}/projects/${state.projectId}`, { wizardStep: stepId });
+      } catch { /* non-critical */ }
+    }
+  };
+
+  const nextStep = async () => {
+    if (stepIndex >= WIZARD_STEPS.length - 1) return;
+    const nextStepId = WIZARD_STEPS[stepIndex + 1].id;
+
+    if (state.currentStep === 'setup') {
+      await saveProjectToServer(nextStepId);
+    } else {
+      updateWizardStep(nextStepId);
+      setState((prev) => ({ ...prev, currentStep: nextStepId }));
     }
   };
 
   const prevStep = () => {
     if (stepIndex > 0) {
-      setState((prev) => ({
-        ...prev,
-        currentStep: WIZARD_STEPS[stepIndex - 1].id,
-      }));
+      const prevStepId = WIZARD_STEPS[stepIndex - 1].id;
+      updateWizardStep(prevStepId);
+      setState((prev) => ({ ...prev, currentStep: prevStepId }));
     }
   };
 
@@ -134,11 +215,12 @@ export function ProjectWizardProvider({ children }: { children: ReactNode }) {
   };
 
   const canProceed = (() => {
+    if (saving) return false;
     switch (state.currentStep) {
       case 'setup':
         return state.setupData.name.trim().length > 0;
       case 'upload':
-        return !!state.takeoffJobId;
+        return !!state.takeoffData;
       case 'review':
         return !!state.projectId;
       case 'vendors':
@@ -166,6 +248,7 @@ export function ProjectWizardProvider({ children }: { children: ReactNode }) {
         setSetupData,
         resetWizard,
         canProceed,
+        saving,
       }}
     >
       {children}
