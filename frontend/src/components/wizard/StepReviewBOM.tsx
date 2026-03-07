@@ -25,7 +25,6 @@ import {
   Check,
   X,
   FileText,
-  Save,
 } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
@@ -67,7 +66,7 @@ interface EditState {
 }
 
 export default function StepReviewBOM() {
-  const { projectId, takeoffJobId, takeoffFileId, takeoffData, setProjectId } = useWizard();
+  const { projectId, takeoffJobId, takeoffFileId } = useWizard();
   const [materials, setMaterials] = useState<MaterialItem[]>([]);
   const [originalMaterials, setOriginalMaterials] = useState<MaterialItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -523,7 +522,7 @@ export default function StepReviewBOM() {
                         </TableCell>
                       </TableRow>
                     ) : (
-                      filtered.map((item, idx) => {
+                      filtered.map((item) => {
                         const globalIdx = materials.indexOf(item);
                         const isExpanded = expanded.has(globalIdx);
                         const isEdited = item._edited;
