@@ -233,28 +233,33 @@ export default function ProjectDetail() {
           </Card>
         </div>
 
-        {/* Action Buttons */}
+        {/* Continue Project Flow */}
         <Card>
           <CardContent className="pt-6">
             <div className="flex gap-2">
-              <Button onClick={() => navigate(`/projects/${id}/plans`)}>
+              <Button onClick={() => {
+                const stepMap: Record<string, string> = {
+                  SCOPE_DIAGNOSIS: 'review', BOM_GENERATION: 'review',
+                  VENDOR_MATCHING: 'vendors', RFQ_SENT: 'rfqs',
+                  QUOTE_COMPARISON: 'dashboard', AWARD_PENDING: 'dashboard', AWARDED: 'dashboard',
+                };
+                const step = stepMap[project.status] || 'dashboard';
+                navigate(`/projects/new?resume=${id}&step=${step}`);
+              }}>
+                <Activity className="w-4 h-4 mr-2" />
+                Continue Project
+              </Button>
+              <Button variant="outline" onClick={() => navigate(`/projects/${id}/plans`)}>
                 <FileText className="w-4 h-4 mr-2" />
                 View Plans
-              </Button>
-              <Button onClick={() => navigate(`/vendor-matching/${id}`)}>
-                <Users className="w-4 h-4 mr-2" />
-                Match Vendors
-              </Button>
-              <Button variant="outline" onClick={() => navigate(`/rfq/${id}`)}>
-                <FileText className="w-4 h-4 mr-2" />
-                Manage RFQs
               </Button>
               <Button variant="outline" onClick={() => navigate(`/quotes/${id}`)}>
                 <TrendingUp className="w-4 h-4 mr-2" />
                 Quote Comparison
               </Button>
-              <Button variant="outline" onClick={() => window.print()}>
-                Export to PDF
+              <Button variant="outline" onClick={() => navigate(`/contracts/${id}`)}>
+                <DollarSign className="w-4 h-4 mr-2" />
+                Contracts
               </Button>
             </div>
           </CardContent>

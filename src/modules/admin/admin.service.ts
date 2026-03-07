@@ -103,4 +103,9 @@ export class AdminService {
       totalSubcontracts,
     };
   }
+
+  async deleteMaterialRule(id: string) {
+    await this.prisma.materialRule.delete({ where: { id } });
+    return { success: true, message: 'Material rule deleted' };
+  }
 }

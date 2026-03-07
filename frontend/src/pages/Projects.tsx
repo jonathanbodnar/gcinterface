@@ -2,31 +2,55 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import axios from 'axios';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { FolderKanban, Upload, Search, Users, FileText, Loader2, AlertCircle, CheckCircle2, Calendar, Layers } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { FolderKanban, Loader2, Trash2, PlayCircle, PlusCircle } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
+function getStatusColor(status: string) {
+  const colors: Record<string, string> = {
+    SCOPE_DIAGNOSIS: 'bg-yellow-100 text-yellow-800',
+    BOM_GENERATION: 'bg-blue-100 text-blue-800',
+    VENDOR_MATCHING: 'bg-purple-100 text-purple-800',
+    RFQ_SENT: 'bg-indigo-100 text-indigo-800',
+    QUOTE_COMPARISON: 'bg-pink-100 text-pink-800',
+    AWARD_PENDING: 'bg-orange-100 text-orange-800',
+    AWARDED: 'bg-green-100 text-green-800',
+    CANCELLED: 'bg-gray-100 text-gray-800',
+  };
+  return colors[status] || 'bg-gray-100 text-gray-800';
+}
+
+function getWizardStep(status: string) {
+  const map: Record<string, string> = {
+    SCOPE_DIAGNOSIS: 'review',
+    BOM_GENERATION: 'review',
+    VENDOR_MATCHING: 'vendors',
+    RFQ_SENT: 'rfqs',
+    QUOTE_COMPARISON: 'dashboard',
+    AWARD_PENDING: 'dashboard',
+    AWARDED: 'dashboard',
+  };
+  return map[status] || 'dashboard';
+}
+
 export default function Projects() {
-  const [projects, setProjects] = useState([]);
-  const [availableJobs, setAvailableJobs] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [jobsLoading, setJobsLoading] = useState(false);
-  const [importingJobId, setImportingJobId] = useState<string | null>(null);
-  const [error, setError] = useState('');
-  const [activeTab, setActiveTab] = useState('imported');
+  const [projects, setProjects] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    loadProjects();
+  }, []);
 
   const loadProjects = async () => {
     setLoading(true);
     try {
       const response = await axios.get(`${API_URL}/projects`);
-      setProjects(response.data);
+      setProjects(response.data || []);
     } catch (err) {
       console.error('Failed to load projects:', err);
     } finally {
@@ -34,49 +58,21 @@ export default function Projects() {
     }
   };
 
-  const loadAvailableJobs = async () => {
-    setJobsLoading(true);
-    setError('');
+  const deleteProject = async (projectId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm('Are you sure you want to delete this project? This cannot be undone.')) return;
     try {
-      const response = await axios.get(`${API_URL}/projects/available-takeoff-jobs`);
-      setAvailableJobs(response.data.jobs || []);
-      if (response.data.message) {
-        setError(response.data.message);
-      }
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to load available jobs');
-    } finally {
-      setJobsLoading(false);
+      await axios.delete(`${API_URL}/projects/${projectId}`);
+      setProjects(projects.filter((p) => p.id !== projectId));
+    } catch (err) {
+      console.error('Failed to delete project:', err);
+      alert('Failed to delete project');
     }
   };
-
-  const handleImportJob = async (jobId: string) => {
-    setImportingJobId(jobId);
-    setError('');
-    try {
-      await axios.post(`${API_URL}/projects/import/${jobId}`);
-      await loadProjects();
-      await loadAvailableJobs();
-      setActiveTab('imported');
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Import failed');
-    } finally {
-      setImportingJobId(null);
-    }
-  };
-
-  useEffect(() => {
-    loadProjects();
-    loadAvailableJobs();
-  }, []);
 
   const formatDate = (date: string) => {
-    if (!date) return 'N/A';
-    return new Date(date).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
+    if (!date) return '-';
+    return new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
   };
 
   return (
@@ -85,213 +81,93 @@ export default function Projects() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-4xl font-bold tracking-tight">Projects</h1>
-            <p className="text-muted-foreground mt-2">Import and manage your construction projects</p>
+            <p className="text-muted-foreground mt-2">{projects.length} projects</p>
           </div>
+          <Button onClick={() => navigate('/projects/new')}>
+            <PlusCircle className="w-4 h-4 mr-2" />
+            New Project
+          </Button>
         </div>
 
-        {error && error.trim() && (
-          <div className="flex items-center gap-2 p-3 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-md">
-            <AlertCircle className="w-4 h-4" />
-            <span>{error}</span>
-          </div>
-        )}
-
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList>
-            <TabsTrigger value="imported">
-              <FolderKanban className="w-4 h-4 mr-2" />
-              Imported Projects ({projects.length})
-            </TabsTrigger>
-            <TabsTrigger value="available">
-              <Upload className="w-4 h-4 mr-2" />
-              Available Takeoffs ({availableJobs.filter(j => !j.isImported).length})
-            </TabsTrigger>
-          </TabsList>
-
-          {/* Available Takeoff Jobs Tab */}
-          <TabsContent value="available" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle>Available Takeoff Jobs</CardTitle>
-                    <CardDescription>Select completed takeoff jobs to import into GC Interface</CardDescription>
-                  </div>
-                  <Button variant="outline" size="sm" onClick={loadAvailableJobs} disabled={jobsLoading}>
-                    {jobsLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Search className="w-4 h-4 mr-2" />}
-                    Refresh
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {jobsLoading ? (
-                  <div className="flex items-center justify-center py-12">
-                    <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-                  </div>
-                ) : availableJobs.length === 0 ? (
-                  <div className="text-center py-12">
-                    <Layers className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
-                    <p className="text-lg font-medium text-muted-foreground mb-2">No Takeoff Jobs Available</p>
-                    <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                      The takeoff database connection is not configured yet. Set the <code className="px-1 py-0.5 bg-muted rounded text-xs">TAKEOFF_DATABASE_URL</code> environment variable in the backend to connect to your takeoff system.
-                    </p>
-                    <p className="text-sm text-muted-foreground mt-4">
-                      For now, you can manually create projects or configure the takeoff database connection in Railway backend environment variables.
-                    </p>
-                  </div>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Job ID</TableHead>
-                        <TableHead>Filename</TableHead>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Area (SF)</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {availableJobs.map((job) => (
-                        <TableRow key={job.id} className={cn(job.isImported && 'opacity-50')}>
-                          <TableCell className="font-mono text-xs">{job.id.substring(0, 8)}...</TableCell>
-                          <TableCell className="font-medium">{job.filename || 'Untitled'}</TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <Calendar className="w-4 h-4" />
-                              {formatDate(job.createdAt)}
-                            </div>
-                          </TableCell>
-                          <TableCell>{job.totalArea ? job.totalArea.toFixed(0) : 'N/A'}</TableCell>
-                          <TableCell>
-                            {job.isImported ? (
-                              <Badge variant="secondary" className="gap-1">
-                                <CheckCircle2 className="w-3 h-3" />
-                                Imported
-                              </Badge>
-                            ) : (
-                              <Badge>{job.status}</Badge>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Button
-                              size="sm"
-                              onClick={() => handleImportJob(job.id)}
-                              disabled={job.isImported || importingJobId === job.id}
-                            >
-                              {importingJobId === job.id ? (
-                                <>
-                                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                  Importing...
-                                </>
-                              ) : job.isImported ? (
-                                'Imported'
-                              ) : (
-                                <>
-                                  <Upload className="w-4 h-4 mr-2" />
-                                  Import
-                                </>
-                              )}
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Imported Projects Tab */}
-          <TabsContent value="imported" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Your Projects</CardTitle>
-                <CardDescription>
-                  {projects.length === 0 ? 'No projects yet' : `${projects.length} project${projects.length !== 1 ? 's' : ''} found`}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {loading ? (
-                  <div className="flex items-center justify-center py-12">
-                    <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-                  </div>
-                ) : projects.length === 0 ? (
-                  <div className="text-center py-12">
-                    <FolderKanban className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
-                    <p className="text-muted-foreground mb-4">No projects yet. Import a takeoff job to get started.</p>
-                    <Button variant="outline" onClick={() => setActiveTab('available')}>
-                      <Upload className="w-4 h-4 mr-2" />
-                      View Available Jobs
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {projects.map((project: any) => (
-                      <Card 
-                        key={project.id} 
-                        className="hover:shadow-md transition-shadow cursor-pointer"
-                        onClick={() => navigate(`/projects/${project.id}`)}
-                      >
-                        <CardContent className="p-6">
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <h3 className="text-lg font-semibold mb-1">{project.name || 'Unnamed Project'}</h3>
-                              <div className="flex items-center gap-4 text-sm text-muted-foreground mb-3">
-                                <span className="flex items-center gap-1">
-                                  <Search className="w-4 h-4" />
-                                  {project.location || 'No location'}
-                                </span>
-                                {project.totalSF && (
-                                  <span className="flex items-center gap-1">
-                                    <FileText className="w-4 h-4" />
-                                    {project.totalSF.toFixed(0)} SF
-                                  </span>
-                                )}
-                                <span className="flex items-center gap-1">
-                                  <Calendar className="w-4 h-4" />
-                                  {formatDate(project.createdAt)}
-                                </span>
-                              </div>
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
-                                {project.status || 'ACTIVE'}
-                              </span>
-                            </div>
-                            <div className="flex gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  navigate(`/vendor-matching/${project.id}`);
-                                }}
-                              >
-                                <Users className="w-4 h-4 mr-2" />
-                                Match Vendors
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  navigate(`/rfq/${project.id}`);
-                                }}
-                              >
-                                <FileText className="w-4 h-4 mr-2" />
-                                Manage RFQs
-                              </Button>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+        <Card>
+          <CardContent className="pt-6">
+            {loading ? (
+              <div className="flex items-center justify-center py-16">
+                <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : projects.length === 0 ? (
+              <div className="text-center py-16">
+                <FolderKanban className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
+                <p className="text-lg font-semibold mb-2">No projects yet</p>
+                <p className="text-muted-foreground mb-4">Start by creating a new project</p>
+                <Button onClick={() => navigate('/projects/new')}>
+                  <PlusCircle className="w-4 h-4 mr-2" />
+                  New Project
+                </Button>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Project Name</TableHead>
+                    <TableHead>Location</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Due Date</TableHead>
+                    <TableHead className="text-right">Area (SF)</TableHead>
+                    <TableHead className="text-right">RFQs</TableHead>
+                    <TableHead>Created</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {projects.map((project: any) => (
+                    <TableRow
+                      key={project.id}
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => navigate(`/projects/${project.id}`)}
+                    >
+                      <TableCell className="font-semibold">{project.name}</TableCell>
+                      <TableCell className="text-muted-foreground">{project.location || '-'}</TableCell>
+                      <TableCell>
+                        <Badge className={getStatusColor(project.status)}>
+                          {project.status?.replace(/_/g, ' ')}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">{formatDate(project.dueDate)}</TableCell>
+                      <TableCell className="text-right">{project.totalSF?.toFixed(0) || '-'}</TableCell>
+                      <TableCell className="text-right">
+                        {project.rfqsSent > 0 ? `${project.rfqsSent}/${project.quotesReceived || 0}` : '-'}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">{formatDate(project.createdAt)}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex gap-1 justify-end">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/projects/new?resume=${project.id}&step=${getWizardStep(project.status)}`);
+                            }}
+                          >
+                            <PlayCircle className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-destructive hover:text-destructive"
+                            onClick={(e) => deleteProject(project.id, e)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </Layout>
   );

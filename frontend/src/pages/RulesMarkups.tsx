@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { DollarSign, Percent, Plus, Edit2, Loader2, Save } from 'lucide-react';
+import { DollarSign, Percent, Plus, Edit2, Loader2, Save, Trash2 } from 'lucide-react';
 import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
@@ -200,9 +200,17 @@ export default function RulesMarkups() {
                           <TableCell>{rule.laborHours?.toFixed(2)} hrs</TableCell>
                           <TableCell>{(rule.wasteFactor * 100)?.toFixed(1)}%</TableCell>
                           <TableCell className="text-right">
-                            <Button variant="ghost" size="sm" onClick={() => openMaterialRuleDialog(rule)}>
-                              <Edit2 className="w-4 h-4" />
-                            </Button>
+                            <div className="flex gap-1 justify-end">
+                              <Button variant="ghost" size="sm" onClick={() => openMaterialRuleDialog(rule)}>
+                                <Edit2 className="w-4 h-4" />
+                              </Button>
+                              <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={async () => {
+                                if (!confirm(`Delete rule for "${rule.material}"?`)) return;
+                                try { await axios.delete(`${API_URL}/admin/material-rules/${rule.id}`); loadMaterialRules(); } catch { alert('Failed to delete'); }
+                              }}>
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))

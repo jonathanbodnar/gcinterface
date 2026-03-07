@@ -309,4 +309,9 @@ export class VendorsService {
       throw new Error(`Failed to parse material catalog: ${error.message}`);
     }
   }
+
+  async deleteVendor(id: string) {
+    await this.prisma.vendor.delete({ where: { id } });
+    return { success: true, message: 'Vendor deleted' };
+  }
 }

@@ -1,6 +1,7 @@
+import { useNavigate } from 'react-router-dom';
 import { useWizard, WIZARD_STEPS } from '../../contexts/ProjectWizardContext';
 import { Button } from '@/components/ui/button';
-import { Check, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, RotateCcw, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface WizardLayoutProps {
@@ -8,7 +9,8 @@ interface WizardLayoutProps {
 }
 
 export default function WizardLayout({ children }: WizardLayoutProps) {
-  const { currentStep, nextStep, prevStep, canProceed, resetWizard } = useWizard();
+  const navigate = useNavigate();
+  const { currentStep, nextStep, prevStep, canProceed, resetWizard, setStep } = useWizard();
   const currentIndex = WIZARD_STEPS.findIndex((s) => s.id === currentStep);
   const isFirst = currentIndex === 0;
   const isLast = currentIndex === WIZARD_STEPS.length - 1;
@@ -20,13 +22,18 @@ export default function WizardLayout({ children }: WizardLayoutProps) {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between mb-4">
             <h1 className="text-xl font-bold tracking-tight">New Project</h1>
-            <Button variant="ghost" size="sm" onClick={resetWizard}>
-              <RotateCcw className="w-4 h-4 mr-2" />
-              Start Over
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" onClick={resetWizard}>
+                <RotateCcw className="w-4 h-4 mr-2" />
+                Start Over
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => navigate('/projects')}>
+                <X className="w-4 h-4 mr-2" />
+                Exit
+              </Button>
+            </div>
           </div>
 
-          {/* Steps */}
           <nav aria-label="Progress">
             <ol className="flex items-center">
               {WIZARD_STEPS.map((step, index) => {
@@ -39,12 +46,12 @@ export default function WizardLayout({ children }: WizardLayoutProps) {
                     className={cn('flex items-center', index < WIZARD_STEPS.length - 1 && 'flex-1')}
                   >
                     <button
-                      onClick={() => {}}
+                      onClick={() => isCompleted && setStep(step.id)}
                       className={cn(
                         'flex items-center gap-2 text-sm font-medium',
                         isCurrent && 'text-primary',
-                        isCompleted && 'text-green-600',
-                        !isCurrent && !isCompleted && 'text-muted-foreground'
+                        isCompleted && 'text-green-600 cursor-pointer hover:underline',
+                        !isCurrent && !isCompleted && 'text-muted-foreground cursor-default'
                       )}
                     >
                       <span

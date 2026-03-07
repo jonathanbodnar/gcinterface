@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Body, Param, UseGuards, Request } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { ProjectsService } from './projects.service';
 import { PrismaService } from '@/common/prisma/prisma.service';
@@ -36,23 +36,21 @@ export class ProjectsController {
   @ApiOperation({ summary: 'Get project details' })
   async getProject(@Param('id') id: string) {
     const data = await this.projectsService.getTakeoffData(id);
-    
-    // Include PDF URL from PlanPage if available
+
     const planPages = await this.prisma.planPage.findMany({
       where: { projectId: id },
       orderBy: { pageNumber: 'asc' },
-      select: {
-        id: true,
-        pageNumber: true,
-        fileName: true,
-        pdfUrl: true,
-      },
+      select: { id: true, pageNumber: true, fileName: true, pdfUrl: true },
     });
-    
-    return {
-      ...data,
-      planPages,
-    };
+
+    return { ...data, planPages };
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Delete a project and all related data' })
+  async deleteProject(@Param('id') id: string) {
+    await this.prisma.project.delete({ where: { id } });
+    return { success: true, message: 'Project deleted' };
   }
 
   @Post(':id/selected-vendors')
@@ -70,4 +68,3 @@ export class ProjectsController {
     return this.projectsService.getSelectedVendors(id);
   }
 }
-

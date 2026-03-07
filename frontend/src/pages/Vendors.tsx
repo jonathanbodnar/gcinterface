@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { MultiSelect } from '@/components/ui/multi-select';
-import { Plus, Upload, Loader2, Edit2, Package, HardHat, Mail, Phone, Building2, Star } from 'lucide-react';
+import { Plus, Upload, Loader2, Edit2, Package, HardHat, Mail, Phone, Building2, Star, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
@@ -424,16 +424,18 @@ export default function Vendors() {
                           </Badge>
                         </TableCell>
                           <TableCell className="text-right">
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              onClick={(e) => {
+                            <div className="flex gap-1 justify-end">
+                              <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); openVendorDialog(vendor); }}>
+                                <Edit2 className="w-4 h-4" />
+                              </Button>
+                              <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={async (e) => {
                                 e.stopPropagation();
-                                openVendorDialog(vendor);
-                              }}
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </Button>
+                                if (!confirm(`Delete "${vendor.name}"?`)) return;
+                                try { await axios.delete(`${API_URL}/vendors/${vendor.id}`); loadVendors(); } catch { alert('Failed to delete'); }
+                              }}>
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
                           </TableCell>
                       </TableRow>
                     ))

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -66,6 +66,12 @@ export class AdminController {
   @ApiOperation({ summary: 'List email templates' })
   async listEmailTemplates(@Query('type') type?: string) {
     return this.adminService.listEmailTemplates(type);
+  }
+
+  @Delete('material-rules/:id')
+  @ApiOperation({ summary: 'Delete a material rule' })
+  async deleteMaterialRule(@Param('id') id: string) {
+    return this.adminService.deleteMaterialRule(id);
   }
 
   // System Stats

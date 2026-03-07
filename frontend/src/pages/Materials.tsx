@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Package, Plus, Upload, Search, Loader2, ExternalLink, Star, TrendingUp, Mail } from 'lucide-react';
+import { Package, Plus, Upload, Search, Loader2, ExternalLink, Star, TrendingUp, Mail, Trash2 } from 'lucide-react';
 import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
@@ -327,16 +327,18 @@ export default function Materials() {
                           <Badge variant="outline">{material.timesUsed || 0}x</Badge>
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
+                          <div className="flex gap-1 justify-end">
+                            <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); viewMaterialDetails(material.id); }}>
+                              <ExternalLink className="w-4 h-4" />
+                            </Button>
+                            <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={async (e) => {
                               e.stopPropagation();
-                              viewMaterialDetails(material.id);
-                            }}
-                          >
-                            <ExternalLink className="w-4 h-4" />
-                          </Button>
+                              if (!confirm(`Delete "${material.name}"?`)) return;
+                              try { await axios.delete(`${API_URL}/materials/${material.id}`); loadMaterials(); } catch { alert('Failed to delete'); }
+                            }}>
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))

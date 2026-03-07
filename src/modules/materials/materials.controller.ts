@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Put, Body, Param, Query, UseGuards, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { PrismaService } from '@/common/prisma/prisma.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { MaterialsService } from './materials.service';
@@ -9,7 +10,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class MaterialsController {
-  constructor(private materialsService: MaterialsService) {}
+  constructor(private materialsService: MaterialsService, private prisma: PrismaService) {}
 
   @Get()
   @ApiOperation({ summary: 'List all materials' })
@@ -57,6 +58,13 @@ export class MaterialsController {
   @ApiOperation({ summary: 'Get vendors that supply this material' })
   async getVendorsForMaterial(@Param('id') id: string) {
     return this.materialsService.getVendorsForMaterial(id);
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Delete a material' })
+  async deleteMaterial(@Param('id') id: string) {
+    await this.prisma.material.delete({ where: { id } });
+    return { success: true, message: 'Material deleted' };
   }
 }
 

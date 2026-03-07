@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Body, Param, Query, UseGuards, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { VendorsService } from './vendors.service';
@@ -107,6 +107,12 @@ export class VendorsController {
   @ApiOperation({ summary: 'Bulk import vendors from Excel' })
   async bulkImport(@Body() vendorsData: any[]) {
     return this.vendorsService.bulkImportVendors(vendorsData);
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Delete a vendor' })
+  async deleteVendor(@Param('id') id: string) {
+    return this.vendorsService.deleteVendor(id);
   }
 }
 
