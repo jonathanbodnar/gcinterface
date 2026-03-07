@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Request, HttpException, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { ProjectsService } from './projects.service';
-import { PrismaService } from '@/common/prisma/prisma.service';
+import { PrismaService, TakeoffPrismaService } from '@/common/prisma/prisma.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('Projects')
@@ -12,6 +12,7 @@ export class ProjectsController {
   constructor(
     private projectsService: ProjectsService,
     private prisma: PrismaService,
+    private takeoffPrisma: TakeoffPrismaService,
   ) {}
 
   @Post()
@@ -76,6 +77,34 @@ export class ProjectsController {
   @ApiOperation({ summary: 'List available takeoff jobs for import' })
   async listAvailableTakeoffJobs() {
     return this.projectsService.listAvailableTakeoffJobs();
+  }
+
+  @Get('takeoff-file/:takeoffJobId')
+  @ApiOperation({ summary: 'Get the uploaded file URL for a takeoff job' })
+  async getTakeoffFileUrl(@Param('takeoffJobId') takeoffJobId: string) {
+    try {
+      const rows: any[] = await this.takeoffPrisma.$queryRaw`
+        SELECT f."storageUrl", f.filename, f.mime, f.pages
+        FROM "jobs" j
+        JOIN "files" f ON j."fileId" = f.id
+        WHERE j.id = ${takeoffJobId}
+        LIMIT 1
+      `;
+
+      if (!rows || rows.length === 0) {
+        throw new HttpException('Takeoff job or file not found', HttpStatus.NOT_FOUND);
+      }
+
+      return {
+        storageUrl: rows[0].storageUrl,
+        filename: rows[0].filename,
+        mime: rows[0].mime,
+        pages: rows[0].pages,
+      };
+    } catch (err) {
+      if (err instanceof HttpException) throw err;
+      throw new HttpException('Failed to fetch file info', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
   }
 
   @Get()

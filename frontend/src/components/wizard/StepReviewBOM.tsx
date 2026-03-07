@@ -145,19 +145,27 @@ export default function StepReviewBOM() {
     setPdfLoading(true);
     setShowPlanViewer(true);
     try {
-      // Try direct file ID first
-      let fileId = takeoffFileId;
+      // Primary: get file URL from gcinterface backend (queries takeoff DB directly)
+      if (takeoffJobId) {
+        try {
+          const res = await axios.get(`${API_URL}/projects/takeoff-file/${takeoffJobId}`);
+          if (res.data?.storageUrl) {
+            setPdfUrl(res.data.storageUrl);
+            return;
+          }
+        } catch {
+          // endpoint failed, try fallbacks
+        }
+      }
 
-      // If no fileId cached, get it from the job record
+      // Fallback: try takeoff API file endpoint
+      let fileId = takeoffFileId;
       if (!fileId && takeoffJobId) {
         try {
           const jobStatus = await takeoffApi.getJobStatus(takeoffJobId);
           fileId = jobStatus?.fileId || null;
-        } catch {
-          // job status fetch failed, continue to fallback
-        }
+        } catch { /* continue */ }
       }
-
       if (fileId) {
         try {
           const fileInfo = await takeoffApi.getFileInfo(fileId);
@@ -165,9 +173,7 @@ export default function StepReviewBOM() {
             setPdfUrl(fileInfo.downloadUrl);
             return;
           }
-        } catch {
-          // file info fetch failed, continue to fallback
-        }
+        } catch { /* continue */ }
       }
 
       // Fallback: try plan pages from the project
@@ -179,13 +185,10 @@ export default function StepReviewBOM() {
             setPdfUrl(planPages[0].pdfUrl);
             return;
           }
-        } catch {
-          // plan pages fetch failed
-        }
+        } catch { /* continue */ }
       }
 
-      // If we got here, no PDF was found through any method
-      setPdfError('Could not load PDF. The file endpoint may need to be deployed.');
+      setPdfError('Could not load PDF. No file URL found for this project.');
     } catch (err: any) {
       console.error('Failed to load PDF:', err);
       setPdfError(err?.message || 'Failed to load PDF');
