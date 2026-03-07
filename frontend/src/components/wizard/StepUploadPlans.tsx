@@ -12,18 +12,32 @@ export default function StepUploadPlans() {
   const { projectId, setupData, takeoffJobId, takeoffData, setTakeoffJobId, setTakeoffFileId, setTakeoffData } = useWizard();
   const [isUploading, setIsUploading] = useState(false);
   const [jobStatus, setJobStatus] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Resume polling if we have a job in progress
+  // Resume polling whenever takeoffJobId becomes available
   useEffect(() => {
     if (takeoffJobId && !takeoffData) {
-      startPolling(takeoffJobId);
+      setLoading(true);
+      // Fetch status immediately, then start polling
+      takeoffApi.getJobStatus(takeoffJobId).then((status) => {
+        setJobStatus(status);
+        setLoading(false);
+        if (status.status === 'COMPLETED') {
+          takeoffApi.getTakeoffResults(takeoffJobId).then(setTakeoffData);
+        } else if (status.status !== 'FAILED' && status.status !== 'CANCELLED') {
+          startPolling(takeoffJobId);
+        }
+      }).catch(() => {
+        setLoading(false);
+        startPolling(takeoffJobId);
+      });
     }
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, []);
+  }, [takeoffJobId]);
 
   const handleFileUpload = async (file: File) => {
     setIsUploading(true);
@@ -89,8 +103,8 @@ export default function StepUploadPlans() {
     );
   }
 
-  // Show progress if job is running
-  if (takeoffJobId && jobStatus) {
+  // Show progress if job is running or loading
+  if (takeoffJobId && (jobStatus || loading)) {
     return (
       <div className="max-w-3xl mx-auto space-y-6">
         <div>
@@ -99,11 +113,11 @@ export default function StepUploadPlans() {
         </div>
         <JobProgress
           jobId={takeoffJobId}
-          status={jobStatus.status}
-          progress={jobStatus.progress || 0}
-          error={jobStatus.error}
-          startedAt={jobStatus.startedAt}
-          finishedAt={jobStatus.finishedAt}
+          status={jobStatus?.status || 'PROCESSING'}
+          progress={jobStatus?.progress || 0}
+          error={jobStatus?.error}
+          startedAt={jobStatus?.startedAt}
+          finishedAt={jobStatus?.finishedAt}
         />
       </div>
     );
