@@ -78,19 +78,31 @@ function loadState(): WizardState {
 const WizardContext = createContext<WizardContextType | undefined>(undefined);
 
 export function ProjectWizardProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<WizardState>(loadState);
-  const [saving, setSaving] = useState(false);
   const [searchParams] = useSearchParams();
+  const resumeId = searchParams.get('resume');
+
+  const [state, setState] = useState<WizardState>(() => {
+    if (resumeId) {
+      return loadState();
+    }
+    localStorage.removeItem(STORAGE_KEY);
+    return {
+      currentStep: 'setup',
+      projectId: null,
+      takeoffJobId: null,
+      takeoffFileId: null,
+      takeoffData: null,
+      setupData: defaultSetupData,
+    };
+  });
+  const [saving, setSaving] = useState(false);
   const resumeLoaded = useRef(false);
 
-  // Handle resume from query params (?resume=projectId&step=stepName)
   useEffect(() => {
-    if (resumeLoaded.current) return;
-    const resumeId = searchParams.get('resume');
-    const resumeStep = searchParams.get('step') as WizardStep | null;
-    if (!resumeId) return;
+    if (resumeLoaded.current || !resumeId) return;
 
     resumeLoaded.current = true;
+    const resumeStep = searchParams.get('step') as WizardStep | null;
     axios.get(`${API_URL}/projects/${resumeId}`).then((res) => {
       const project = res.data.project || res.data;
       setState({
@@ -112,7 +124,7 @@ export function ProjectWizardProvider({ children }: { children: ReactNode }) {
     }).catch((err) => {
       console.error('Failed to load project for resume:', err);
     });
-  }, [searchParams]);
+  }, [resumeId, searchParams]);
 
   useEffect(() => {
     const { takeoffData, ...saveable } = state;
