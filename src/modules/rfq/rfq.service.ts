@@ -118,10 +118,6 @@ export class RFQService {
   }
 
   async sendRFQ(rfqId: string) {
-    if (!this.sendgridConfigured) {
-      throw new Error('Email service not configured. Please set SENDGRID_API_KEY environment variable.');
-    }
-
     const rfq = await this.prisma.rFQ.findUnique({
       where: { id: rfqId },
       include: {
@@ -139,85 +135,69 @@ export class RFQService {
       throw new Error('RFQ not found');
     }
 
-    if (!rfq.vendor.email) {
-      throw new Error(`Vendor ${rfq.vendor.name} does not have an email address`);
-    }
+    let emailSent = false;
+    let emailError: string | null = null;
 
-    // Get email template - first try to find ANY active RFQ template
-    // Users create templates without specific names, so just use type
-    let template = await this.prisma.emailTemplate.findFirst({
-      where: {
-        type: 'RFQ',
-        active: true,
-      },
-      orderBy: {
-        createdAt: 'desc', // Use most recent template
-      },
-    });
+    if (this.sendgridConfigured && rfq.vendor.email) {
+      try {
+        let template = await this.prisma.emailTemplate.findFirst({
+          where: { type: 'RFQ', active: true },
+          orderBy: { createdAt: 'desc' },
+        });
 
-    if (template) {
-      this.logger.log(`Using RFQ template: ${template.name || 'Unnamed'}`);
-    } else {
-      this.logger.warn('No RFQ template found in database, using default template');
-    }
+        const emailBody = this.generateRFQEmail(rfq, template);
 
-    // Generate email body
-    const emailBody = this.generateRFQEmail(rfq, template);
+        this.logger.log('Generating PDF attachment for RFQ...');
+        const pdfBuffer = await this.pdfGenerator.generateRFQPDF(rfqId);
+        const pdfBase64 = pdfBuffer.toString('base64');
 
-    // Generate PDF attachment
-    this.logger.log('Generating PDF attachment for RFQ...');
-    const pdfBuffer = await this.pdfGenerator.generateRFQPDF(rfqId);
-    const pdfBase64 = pdfBuffer.toString('base64');
+        const fromEmail = this.configService.get('SENDGRID_FROM_EMAIL') || 'noreply@gclegacy.com';
+        const fromName = this.configService.get('SENDGRID_FROM_NAME') || 'GC Legacy Construction';
 
-    // Send email via SendGrid
-    const fromEmail = this.configService.get('SENDGRID_FROM_EMAIL') || 'noreply@gclegacy.com';
-    const fromName = this.configService.get('SENDGRID_FROM_NAME') || 'GC Legacy Construction';
-
-    try {
-      const msg = {
-        to: rfq.vendor.email,
-        from: {
-          email: fromEmail,
-          name: fromName,
-        },
-        subject: rfq.subject,
-        html: emailBody,
-        // Add reply-to for quote responses
-        replyTo: this.configService.get('SENDGRID_REPLY_TO') || 'quotes@mail.gclegacy.com',
-        // Attach PDF
-        attachments: [
-          {
+        await sgMail.send({
+          to: rfq.vendor.email,
+          from: { email: fromEmail, name: fromName },
+          subject: rfq.subject,
+          html: emailBody,
+          replyTo: this.configService.get('SENDGRID_REPLY_TO') || 'quotes@mail.gclegacy.com',
+          attachments: [{
             content: pdfBase64,
             filename: `RFQ-${rfq.rfqNumber}.pdf`,
             type: 'application/pdf',
             disposition: 'attachment',
-          },
-        ],
-      };
+          }],
+        });
 
-      const response = await sgMail.send(msg);
-      this.logger.log(`📧 RFQ sent to ${rfq.vendor.name} with PDF attachment`);
-      this.logger.log(`📧 RFQ sent to ${rfq.vendor.name} (${rfq.vendor.email})`);
-
-      // Update RFQ status
-      await this.prisma.rFQ.update({
-        where: { id: rfqId },
-        data: {
-          status: 'SENT',
-          sentAt: new Date(),
-        },
-      });
-
-      return {
-        rfq,
-        emailInfo: response,
-        success: true,
-        message: `RFQ sent successfully to ${rfq.vendor.email}`,
-      };
-    } catch (error) {
-      this.logger.error(`Failed to send RFQ: ${error.message}`, error.stack);
-      throw new Error(`Failed to send email: ${error.message}`);
+        this.logger.log(`📧 RFQ emailed to ${rfq.vendor.name} (${rfq.vendor.email})`);
+        emailSent = true;
+      } catch (error) {
+        this.logger.error(`Email failed for RFQ ${rfqId}: ${error.message}`);
+        emailError = error.message;
+      }
+    } else if (!this.sendgridConfigured) {
+      this.logger.warn(`SendGrid not configured - marking RFQ ${rfqId} as sent without email`);
+      emailError = 'Email service not configured';
+    } else if (!rfq.vendor.email) {
+      emailError = `Vendor ${rfq.vendor.name} has no email address`;
     }
+
+    // Always mark as SENT so the workflow isn't blocked
+    await this.prisma.rFQ.update({
+      where: { id: rfqId },
+      data: {
+        status: 'SENT',
+        sentAt: new Date(),
+      },
+    });
+
+    return {
+      success: true,
+      emailSent,
+      emailError,
+      message: emailSent
+        ? `RFQ sent to ${rfq.vendor.email}`
+        : `RFQ marked as sent${emailError ? ` (${emailError})` : ''}`,
+    };
   }
 
   private generateRFQEmail(rfq: any, template: any): string {
