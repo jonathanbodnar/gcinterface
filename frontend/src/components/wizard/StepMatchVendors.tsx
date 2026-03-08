@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 export default function StepMatchVendors() {
-  const { projectId } = useWizard();
+  const { projectId, setSelectedVendorIds } = useWizard();
   const [materialsNeeded, setMaterialsNeeded] = useState<Record<string, any[]>>({});
   const [vendors, setVendors] = useState<any[]>([]);
   const [selectedVendors, setSelectedVendors] = useState<Set<string>>(new Set());
@@ -74,14 +74,17 @@ export default function StepMatchVendors() {
       }
     }
     setSelectedVendors(next);
+    setSelectedVendorIds(Array.from(next));
   };
 
   const saveSelections = async () => {
     if (!projectId) return;
     setSaving(true);
     try {
+      const ids = Array.from(selectedVendors);
+      setSelectedVendorIds(ids);
       await axios.post(`${API_URL}/projects/${projectId}/selected-vendors`, {
-        vendorIds: Array.from(selectedVendors),
+        vendorIds: ids,
       });
     } catch (err) {
       console.error('Failed to save vendors:', err);

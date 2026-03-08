@@ -32,6 +32,7 @@ interface WizardState {
   takeoffFileId: string | null;
   takeoffData: any | null;
   setupData: ProjectSetupData;
+  selectedVendorIds: string[];
 }
 
 interface WizardContextType extends WizardState {
@@ -43,6 +44,7 @@ interface WizardContextType extends WizardState {
   setTakeoffFileId: (id: string) => void;
   setTakeoffData: (data: any) => void;
   setSetupData: (data: Partial<ProjectSetupData>) => void;
+  setSelectedVendorIds: (ids: string[]) => void;
   resetWizard: () => void;
   canProceed: boolean;
   saving: boolean;
@@ -63,7 +65,10 @@ const STORAGE_KEY = 'gc-wizard-state';
 function loadState(): WizardState {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) return JSON.parse(saved);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      return { selectedVendorIds: [], ...parsed };
+    }
   } catch { /* ignore */ }
   return {
     currentStep: 'setup',
@@ -72,6 +77,7 @@ function loadState(): WizardState {
     takeoffFileId: null,
     takeoffData: null,
     setupData: defaultSetupData,
+    selectedVendorIds: [],
   };
 }
 
@@ -93,6 +99,7 @@ export function ProjectWizardProvider({ children }: { children: ReactNode }) {
       takeoffFileId: null,
       takeoffData: null,
       setupData: defaultSetupData,
+      selectedVendorIds: [],
     };
   });
   const [saving, setSaving] = useState(false);
@@ -120,6 +127,7 @@ export function ProjectWizardProvider({ children }: { children: ReactNode }) {
           disciplines: ['A', 'P', 'M', 'E'],
           targets: ['rooms', 'walls', 'doors', 'windows', 'pipes', 'ducts', 'fixtures'],
         },
+        selectedVendorIds: project.selectedVendorIds || [],
       });
     }).catch((err) => {
       console.error('Failed to load project for resume:', err);
@@ -214,6 +222,9 @@ export function ProjectWizardProvider({ children }: { children: ReactNode }) {
       setupData: { ...prev.setupData, ...data },
     }));
 
+  const setSelectedVendorIds = (ids: string[]) =>
+    setState((prev) => ({ ...prev, selectedVendorIds: ids }));
+
   const resetWizard = () => {
     localStorage.removeItem(STORAGE_KEY);
     setState({
@@ -223,6 +234,7 @@ export function ProjectWizardProvider({ children }: { children: ReactNode }) {
       takeoffFileId: null,
       takeoffData: null,
       setupData: defaultSetupData,
+      selectedVendorIds: [],
     });
   };
 
@@ -258,6 +270,7 @@ export function ProjectWizardProvider({ children }: { children: ReactNode }) {
         setTakeoffFileId,
         setTakeoffData,
         setSetupData,
+        setSelectedVendorIds,
         resetWizard,
         canProceed,
         saving,

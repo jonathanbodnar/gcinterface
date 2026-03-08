@@ -10,7 +10,7 @@ import { Loader2, Send, FileText, Clock, CheckCircle2, XCircle } from 'lucide-re
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 export default function StepSendRFQs() {
-  const { projectId } = useWizard();
+  const { projectId, selectedVendorIds } = useWizard();
   const [rfqs, setRfqs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState<string | null>(null);
@@ -42,22 +42,26 @@ export default function StepSendRFQs() {
 
   const autoCreateRFQs = async () => {
     try {
-      const [vendorsRes, bomRes] = await Promise.all([
-        axios.get(`${API_URL}/projects/${projectId}/selected-vendors`),
-        axios.get(`${API_URL}/bom?projectId=${projectId}`),
-      ]);
+      // Get vendor IDs: prefer context (set in step 4), fall back to backend
+      let vendorIds = selectedVendorIds || [];
+      if (vendorIds.length === 0) {
+        try {
+          const vendorsRes = await axios.get(`${API_URL}/projects/${projectId}/selected-vendors`);
+          vendorIds = (vendorsRes.data?.vendors || []).map((v: any) => v.id);
+        } catch { /* continue */ }
+      }
 
-      const selectedVendors = vendorsRes.data?.vendors || [];
+      const bomRes = await axios.get(`${API_URL}/bom?projectId=${projectId}`);
       const bomItems = bomRes.data?.items || [];
       const materialIds = bomItems.map((item: any) => item.id);
 
-      if (selectedVendors.length === 0 || materialIds.length === 0) return;
+      if (vendorIds.length === 0 || materialIds.length === 0) return;
 
-      for (const vendor of selectedVendors) {
+      for (const vendorId of vendorIds) {
         try {
           await axios.post(`${API_URL}/rfq/create`, {
             projectId,
-            vendorId: vendor.id,
+            vendorId,
             materialIds,
           });
         } catch { /* individual RFQ creation may fail */ }

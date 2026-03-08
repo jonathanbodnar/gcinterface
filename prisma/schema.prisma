@@ -78,6 +78,9 @@ model Project {
   // Current stage
   currentStage String? // "Collecting Bids", "In Progress", "Completed"
 
+  // Selected vendors for RFQ generation
+  selectedVendorIds String[] @default([])
+
   // Bid tracking
   rfqsSent       Int    @default(0)
   quotesReceived Int    @default(0)
