@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ArrowLeft, Package, DollarSign, Users, Activity, FileText, Loader2, TrendingUp, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Package, DollarSign, Users, Activity, FileText, Loader2, TrendingUp, AlertCircle, AlertTriangle } from 'lucide-react';
 import axios from 'axios';
 import { cn } from '@/lib/utils';
 
@@ -233,17 +233,71 @@ export default function ProjectDetail() {
           </Card>
         </div>
 
-        {/* Continue Project Flow */}
+        {/* Due Date Warning */}
+        {(() => {
+          const dd = project.dueDate ? new Date(project.dueDate) : null;
+          const daysLeft = dd ? Math.ceil((dd.getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : null;
+          if (daysLeft !== null && daysLeft <= 14 && daysLeft >= 0) {
+            return (
+              <div className="bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5" />
+                <div>
+                  <p className="font-medium text-yellow-800 dark:text-yellow-200">Due date is in {daysLeft} day{daysLeft !== 1 ? 's' : ''}</p>
+                  <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                    {project.dueDate && `Due: ${new Date(project.dueDate).toLocaleDateString()}`}
+                  </p>
+                </div>
+              </div>
+            );
+          }
+          return null;
+        })()}
+
+        {/* Cost Breakdown by Trade */}
+        {bom?.summary?.byTrade && Object.keys(bom.summary.byTrade).length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Cost Breakdown by Trade</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {Object.entries(bom.summary.byTrade).map(([trade, data]: [string, any]) => {
+                  const totalCost = bom.summary.totalCost || 1;
+                  const pct = totalCost > 0 ? ((data.totalCost || 0) / totalCost) * 100 : 0;
+                  return (
+                    <div key={trade} className="space-y-1">
+                      <div className="flex justify-between text-sm">
+                        <span className="flex items-center gap-2">
+                          <Badge variant="outline">{trade}</Badge>
+                          {data.items} items
+                        </span>
+                        <span className="font-medium">${(data.totalCost || 0).toLocaleString()} ({pct.toFixed(0)}%)</span>
+                      </div>
+                      <div className="w-full bg-muted rounded-full h-2">
+                        <div className="bg-primary h-2 rounded-full" style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Quick Actions */}
         <Card>
-          <CardContent className="pt-6">
-            <div className="flex gap-2">
+          <CardHeader>
+            <CardTitle>Quick Actions</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
               <Button onClick={() => {
                 const stepMap: Record<string, string> = {
                   SCOPE_DIAGNOSIS: 'review', BOM_GENERATION: 'review',
                   VENDOR_MATCHING: 'vendors', RFQ_SENT: 'rfqs',
-                  QUOTE_COMPARISON: 'dashboard', AWARD_PENDING: 'dashboard', AWARDED: 'dashboard',
+                  QUOTE_COMPARISON: 'award', AWARD_PENDING: 'award', AWARDED: 'award',
                 };
-                const step = stepMap[project.status] || 'dashboard';
+                const step = project.wizardStep || stepMap[project.status] || 'review';
                 navigate(`/projects/new?resume=${id}&step=${step}`);
               }}>
                 <Activity className="w-4 h-4 mr-2" />

@@ -80,11 +80,11 @@ function getWizardStep(project: any) {
     BOM_GENERATION: 'review',
     VENDOR_MATCHING: 'vendors',
     RFQ_SENT: 'rfqs',
-    QUOTE_COMPARISON: 'dashboard',
-    AWARD_PENDING: 'dashboard',
-    AWARDED: 'dashboard',
+    QUOTE_COMPARISON: 'award',
+    AWARD_PENDING: 'award',
+    AWARDED: 'award',
   };
-  return map[project.status] || 'dashboard';
+  return map[project.status] || 'review';
 }
 
 export default function Projects() {

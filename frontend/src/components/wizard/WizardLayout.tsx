@@ -10,10 +10,11 @@ interface WizardLayoutProps {
 
 export default function WizardLayout({ children }: WizardLayoutProps) {
   const navigate = useNavigate();
-  const { currentStep, nextStep, prevStep, canProceed, resetWizard, setStep, saving } = useWizard();
+  const { currentStep, nextStep, prevStep, canProceed, resetWizard, setStep, saving, setupData } = useWizard();
   const currentIndex = WIZARD_STEPS.findIndex((s) => s.id === currentStep);
   const isFirst = currentIndex === 0;
   const isLast = currentIndex === WIZARD_STEPS.length - 1;
+  const projectName = setupData?.name?.trim();
 
   return (
     <div className="min-h-screen bg-background">
@@ -21,7 +22,7 @@ export default function WizardLayout({ children }: WizardLayoutProps) {
       <div className="border-b bg-card sticky top-0 z-40">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between mb-4">
-            <h1 className="text-xl font-bold tracking-tight">New Project</h1>
+            <h1 className="text-xl font-bold tracking-tight">{projectName || 'New Project'}</h1>
             <div className="flex items-center gap-2">
               <Button variant="ghost" size="sm" onClick={resetWizard}>
                 <RotateCcw className="w-4 h-4 mr-2" />

@@ -5,7 +5,7 @@ import StepUploadPlans from '../components/wizard/StepUploadPlans';
 import StepReviewBOM from '../components/wizard/StepReviewBOM';
 import StepMatchVendors from '../components/wizard/StepMatchVendors';
 import StepSendRFQs from '../components/wizard/StepSendRFQs';
-import StepDashboard from '../components/wizard/StepDashboard';
+import StepAwardVendors from '../components/wizard/StepAwardVendors';
 
 function WizardContent() {
   const { currentStep } = useWizard();
@@ -16,7 +16,7 @@ function WizardContent() {
     review: <StepReviewBOM />,
     vendors: <StepMatchVendors />,
     rfqs: <StepSendRFQs />,
-    dashboard: <StepDashboard />,
+    award: <StepAwardVendors />,
   }[currentStep];
 
   return <WizardLayout>{stepComponent}</WizardLayout>;

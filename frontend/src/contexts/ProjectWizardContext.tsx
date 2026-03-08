@@ -4,15 +4,15 @@ import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
-export type WizardStep = 'setup' | 'upload' | 'review' | 'vendors' | 'rfqs' | 'dashboard';
+export type WizardStep = 'setup' | 'upload' | 'review' | 'vendors' | 'rfqs' | 'award';
 
 export const WIZARD_STEPS: { id: WizardStep; label: string; number: number }[] = [
   { id: 'setup', label: 'Project Setup', number: 1 },
   { id: 'upload', label: 'Upload Plans', number: 2 },
   { id: 'review', label: 'Review BOM', number: 3 },
   { id: 'vendors', label: 'Match Vendors', number: 4 },
-  { id: 'rfqs', label: 'Send RFQs', number: 5 },
-  { id: 'dashboard', label: 'Dashboard', number: 6 },
+  { id: 'rfqs', label: 'Review RFQs', number: 5 },
+  { id: 'award', label: 'Award Vendors', number: 6 },
 ];
 
 interface ProjectSetupData {
@@ -239,7 +239,7 @@ export function ProjectWizardProvider({ children }: { children: ReactNode }) {
         return !!state.projectId;
       case 'rfqs':
         return !!state.projectId;
-      case 'dashboard':
+      case 'award':
         return true;
       default:
         return false;
