@@ -165,6 +165,68 @@ export class ProjectsController {
     }
   }
 
+  @Post(':id/recalculate-status')
+  @ApiOperation({ summary: 'Recalculate project status from actual data' })
+  async recalculateStatus(@Param('id') id: string) {
+    const project = await this.prisma.project.findUnique({ where: { id } });
+    if (!project) throw new HttpException('Project not found', HttpStatus.NOT_FOUND);
+
+    const rfqs = await this.prisma.rFQ.findMany({
+      where: { projectId: id },
+      select: { id: true, status: true },
+    });
+    const quotes = await this.prisma.quote.findMany({
+      where: { projectId: id },
+      select: { id: true, status: true },
+    });
+    const boms = await this.prisma.bOM.findMany({
+      where: { projectId: id },
+      select: { id: true },
+    });
+
+    const sentRfqs = rfqs.filter(r => r.status === 'SENT' || r.status === 'RESPONDED');
+    const receivedQuotes = quotes.filter(q => q.status === 'RECEIVED' || q.status === 'UNDER_REVIEW');
+    const awardedQuotes = quotes.filter(q => q.status === 'AWARDED');
+
+    let correctStatus = project.status;
+
+    if (awardedQuotes.length > 0 && awardedQuotes.length >= quotes.length && quotes.length > 0) {
+      correctStatus = 'AWARDED';
+    } else if (awardedQuotes.length > 0) {
+      correctStatus = 'AWARD_PENDING';
+    } else if (receivedQuotes.length > 0) {
+      correctStatus = 'QUOTE_COMPARISON';
+    } else if (sentRfqs.length > 0) {
+      correctStatus = 'RFQ_SENT';
+    } else if (project.selectedVendorIds?.length > 0) {
+      correctStatus = 'VENDOR_MATCHING';
+    } else if (boms.length > 0) {
+      correctStatus = 'BOM_GENERATION';
+    } else {
+      correctStatus = 'SCOPE_DIAGNOSIS';
+    }
+
+    if (correctStatus !== project.status) {
+      await this.prisma.project.update({
+        where: { id },
+        data: { status: correctStatus },
+      });
+    }
+
+    return {
+      projectId: id,
+      previousStatus: project.status,
+      correctStatus,
+      changed: correctStatus !== project.status,
+      data: {
+        bomItems: boms.length,
+        rfqsSent: sentRfqs.length,
+        quotesReceived: receivedQuotes.length,
+        quotesAwarded: awardedQuotes.length,
+      },
+    };
+  }
+
   @Post(':id/selected-vendors')
   @ApiOperation({ summary: 'Save selected vendors for project' })
   async saveSelectedVendors(

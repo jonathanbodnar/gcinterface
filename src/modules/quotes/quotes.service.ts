@@ -61,16 +61,19 @@ export class QuotesService {
   async selectWinner(quoteId: string) {
     const quote = await this.prisma.quote.update({
       where: { id: quoteId },
-      data: {
-        status: 'AWARDED',
-      },
+      data: { status: 'AWARDED' },
     });
 
-    // Update project status to AWARD_PENDING (don't reject other quotes -
-    // multiple vendors can be awarded for different materials)
+    // Check if ALL quotes for the project are now awarded
+    const allQuotes = await this.prisma.quote.findMany({
+      where: { projectId: quote.projectId },
+      select: { status: true },
+    });
+    const allAwarded = allQuotes.length > 0 && allQuotes.every(q => q.status === 'AWARDED');
+
     await this.prisma.project.update({
       where: { id: quote.projectId },
-      data: { status: 'AWARD_PENDING' },
+      data: { status: allAwarded ? 'AWARDED' : 'AWARD_PENDING' },
     });
 
     return {

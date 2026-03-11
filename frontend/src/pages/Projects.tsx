@@ -100,7 +100,23 @@ export default function Projects() {
     setLoading(true);
     try {
       const response = await axios.get(`${API_URL}/projects`);
-      setProjects(response.data || []);
+      const projectList = response.data || [];
+      setProjects(projectList);
+
+      // Auto-fix any projects with potentially wrong statuses
+      const needsRecalc = projectList.filter(
+        (p: any) => p.status === 'AWARDED' || p.status === 'AWARD_PENDING'
+      );
+      for (const p of needsRecalc) {
+        try {
+          const res = await axios.post(`${API_URL}/projects/${p.id}/recalculate-status`);
+          if (res.data?.changed) {
+            setProjects(prev => prev.map(proj =>
+              proj.id === p.id ? { ...proj, status: res.data.correctStatus } : proj
+            ));
+          }
+        } catch { /* non-critical */ }
+      }
     } catch (err) {
       console.error('Failed to load projects:', err);
     } finally {
