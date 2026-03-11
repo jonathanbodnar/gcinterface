@@ -61,6 +61,90 @@ export class BOMController {
     };
   }
 
+  @Get('status')
+  @ApiOperation({ summary: 'Get RFQ/quote status for each BOM item' })
+  async getBOMStatus(@Query('projectId') projectId: string) {
+    if (!projectId) throw new Error('projectId query parameter is required');
+
+    const bomItems = await this.prisma.bOM.findMany({
+      where: { projectId },
+      select: {
+        id: true,
+        description: true,
+        category: true,
+        finalQty: true,
+        uom: true,
+        material: { select: { id: true, name: true, trade: true } },
+        rfqItems: {
+          select: {
+            id: true,
+            rfq: {
+              select: {
+                id: true,
+                status: true,
+                vendor: { select: { id: true, name: true } },
+              },
+            },
+          },
+        },
+        quoteItems: {
+          select: {
+            id: true,
+            unitPrice: true,
+            totalPrice: true,
+            quote: {
+              select: {
+                id: true,
+                status: true,
+                vendor: { select: { id: true, name: true } },
+              },
+            },
+          },
+        },
+      },
+      orderBy: [{ category: 'asc' }, { description: 'asc' }],
+    });
+
+    return bomItems.map(item => {
+      const rfqStatuses = item.rfqItems.map(ri => ({
+        rfqId: ri.rfq.id,
+        status: ri.rfq.status,
+        vendorName: ri.rfq.vendor.name,
+        vendorId: ri.rfq.vendor.id,
+      }));
+
+      const quoteStatuses = item.quoteItems.map(qi => ({
+        quoteId: qi.quote.id,
+        status: qi.quote.status,
+        vendorName: qi.quote.vendor.name,
+        vendorId: qi.quote.vendor.id,
+        unitPrice: qi.unitPrice,
+        totalPrice: qi.totalPrice,
+      }));
+
+      const hasAward = quoteStatuses.some(q => q.status === 'AWARDED');
+      const hasQuote = quoteStatuses.length > 0;
+      const hasRFQ = rfqStatuses.some(r => r.status === 'SENT' || r.status === 'RESPONDED');
+
+      let overallStatus: 'AVAILABLE' | 'RFQ_SENT' | 'QUOTED' | 'AWARDED' = 'AVAILABLE';
+      if (hasAward) overallStatus = 'AWARDED';
+      else if (hasQuote) overallStatus = 'QUOTED';
+      else if (hasRFQ) overallStatus = 'RFQ_SENT';
+
+      return {
+        id: item.id,
+        description: item.description,
+        category: item.category,
+        trade: item.material?.trade || item.category?.charAt(0) || '?',
+        finalQty: item.finalQty,
+        uom: item.uom,
+        overallStatus,
+        rfqs: rfqStatuses,
+        quotes: quoteStatuses,
+      };
+    });
+  }
+
   @Post('generate/:projectId')
   @ApiOperation({ summary: 'Generate BOM from takeoff data' })
   async generateBOM(@Param('projectId') projectId: string, @Request() req) {

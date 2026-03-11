@@ -66,19 +66,8 @@ export class QuotesService {
       },
     });
 
-    // Reject other quotes for the same project
-    await this.prisma.quote.updateMany({
-      where: {
-        projectId: quote.projectId,
-        id: { not: quoteId },
-        status: 'RECEIVED',
-      },
-      data: {
-        status: 'REJECTED',
-      },
-    });
-
-    // Update project status
+    // Update project status to AWARD_PENDING (don't reject other quotes -
+    // multiple vendors can be awarded for different materials)
     await this.prisma.project.update({
       where: { id: quote.projectId },
       data: { status: 'AWARD_PENDING' },
@@ -336,9 +325,21 @@ export class QuotesService {
       };
     });
 
+    // Compute vendor totals from line items (more accurate than stored totalAmount)
+    const vendorTotals = vendors.map(vendorName => {
+      const quote = quotes.find(q => q.vendor.name === vendorName);
+      const lineItemTotal = quote?.items.reduce((sum, item) => sum + (item.totalPrice || 0), 0) || 0;
+      return {
+        vendor: vendorName,
+        lineItemTotal,
+        storedTotal: quote?.totalAmount || 0,
+      };
+    });
+
     return {
       vendors,
       items: itemComparison,
+      vendorTotals,
     };
   }
 
@@ -465,25 +466,50 @@ export class QuotesService {
   }
 
   private parseEmailBodyQuote(emailBody: string): any {
-    // Simple text parsing - look for patterns like:
-    // "VCT Flooring - $3.50/SF - Total: $8,750"
-    // This is very basic - production would use more sophisticated parsing
-
-    const lines = emailBody.split('\n');
+    const lines = emailBody.split('\n').map(l => l.trim()).filter(Boolean);
     const items = [];
     let totalAmount = 0;
 
+    // Look for a total line like "Total: $12,345" or "Grand Total: $12,345"
+    let explicitTotal = 0;
     for (const line of lines) {
-      // Look for price patterns
-      const priceMatch = line.match(/\$?([\d,]+\.?\d*)/);
-      if (priceMatch) {
-        const price = parseFloat(priceMatch[1].replace(/,/g, ''));
+      const totalMatch = line.match(/(?:grand\s*)?total\s*[:=]?\s*\$?([\d,]+\.?\d*)/i);
+      if (totalMatch) {
+        explicitTotal = parseFloat(totalMatch[1].replace(/,/g, ''));
+      }
+    }
+
+    for (const line of lines) {
+      // Only match lines that look like actual line items with structured pricing
+      // Pattern: "Description - $price/UOM - Total: $total"
+      const structuredMatch = line.match(/^(.+?)\s*[-–]\s*\$?([\d,]+\.?\d*)\s*\/\s*(\w+)\s*[-–]\s*(?:Total:?\s*)?\$?([\d,]+\.?\d*)/i);
+      if (structuredMatch) {
+        const [, description, unitPrice, uom, total] = structuredMatch;
+        const price = parseFloat(total.replace(/,/g, ''));
+        if (price > 0 && description.length > 3) {
+          items.push({
+            description: description.trim(),
+            quantity: 1,
+            uom: uom.trim(),
+            unitPrice: parseFloat(unitPrice.replace(/,/g, '')),
+            totalPrice: price,
+          });
+          totalAmount += price;
+          continue;
+        }
+      }
+
+      // Pattern: "Description  Qty UOM  $Unit  $Total" (tab/space-separated table row)
+      const tableMatch = line.match(/^(.{5,}?)\s{2,}([\d.]+)\s+(\w{1,5})\s+\$?([\d,]+\.?\d*)\s+\$?([\d,]+\.?\d*)\s*$/);
+      if (tableMatch) {
+        const [, description, qty, uom, unitPrice, total] = tableMatch;
+        const price = parseFloat(total.replace(/,/g, ''));
         if (price > 0) {
           items.push({
-            description: line.split('-')[0]?.trim() || 'Unknown item',
-            quantity: 1,
-            uom: 'EA',
-            unitPrice: price,
+            description: description.trim(),
+            quantity: parseFloat(qty),
+            uom: uom.trim(),
+            unitPrice: parseFloat(unitPrice.replace(/,/g, '')),
             totalPrice: price,
           });
           totalAmount += price;
@@ -496,7 +522,7 @@ export class QuotesService {
     return {
       quoteNumber: null,
       items,
-      totalAmount,
+      totalAmount: explicitTotal > 0 ? explicitTotal : totalAmount,
       hasVE: false,
     };
   }

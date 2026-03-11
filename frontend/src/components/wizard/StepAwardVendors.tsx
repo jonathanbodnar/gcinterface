@@ -30,7 +30,7 @@ export default function StepAwardVendors() {
   const [rfqs, setRfqs] = useState<any[]>([]);
   const [quotes, setQuotes] = useState<any[]>([]);
   const [quoteDetails, setQuoteDetails] = useState<Record<string, any>>({});
-  const [bomItems, setBomItems] = useState<any[]>([]);
+  const [bomStatuses, setBomStatuses] = useState<any[]>([]);
   const [comparison, setComparison] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [awarding, setAwarding] = useState<string | null>(null);
@@ -44,17 +44,42 @@ export default function StepAwardVendors() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [rfqRes, quoteRes, bomRes] = await Promise.all([
+      const [rfqRes, quoteRes, bomStatusRes] = await Promise.all([
         axios.get(`${API_URL}/rfq?projectId=${projectId}`),
         axios.get(`${API_URL}/quotes?projectId=${projectId}`).catch(() => ({ data: [] })),
-        axios.get(`${API_URL}/bom?projectId=${projectId}`).catch(() => ({ data: { items: [] } })),
+        axios.get(`${API_URL}/bom/status?projectId=${projectId}`).catch(() => ({ data: [] })),
       ]);
       setRfqs(rfqRes.data || []);
-      setQuotes(quoteRes.data || []);
-      setBomItems(bomRes.data?.items || []);
+      setBomStatuses(bomStatusRes.data || []);
+
+      const quoteList = quoteRes.data || [];
+
+      // Auto-load details for all quotes so we have line items
+      const detailPromises = quoteList.map((q: any) =>
+        axios.get(`${API_URL}/quotes/${q.id}`).catch(() => ({ data: null }))
+      );
+      const detailResults = await Promise.all(detailPromises);
+      const details: Record<string, any> = {};
+      detailResults.forEach((res) => {
+        if (res.data) details[res.data.id] = res.data;
+      });
+      setQuoteDetails(details);
+
+      // Compute correct totals from line items
+      const quotesWithCorrectTotals = quoteList.map((q: any) => {
+        const detail = details[q.id];
+        if (detail?.items?.length > 0) {
+          const lineItemTotal = detail.items.reduce(
+            (sum: number, item: any) => sum + (item.totalPrice || 0),
+            0
+          );
+          return { ...q, computedTotal: lineItemTotal };
+        }
+        return { ...q, computedTotal: q.totalAmount || 0 };
+      });
+      setQuotes(quotesWithCorrectTotals);
 
       // Load comparison if quotes exist
-      const quoteList = quoteRes.data || [];
       if (quoteList.length > 0) {
         try {
           const compRes = await axios.get(`${API_URL}/quotes/compare/${projectId}`);
@@ -123,24 +148,14 @@ export default function StepAwardVendors() {
   const sentRfqs = rfqs.filter((r: any) => r.status === 'SENT' || r.status === 'RESPONDED');
   const awardedQuotes = quotes.filter((q: any) => q.status === 'AWARDED');
 
-  // Identify unquoted BOM items
-  const quotedBomItemIds = new Set<string>();
-  quotes.forEach((q: any) => {
-    const detail = quoteDetails[q.id];
-    if (detail?.items) {
-      detail.items.forEach((item: any) => quotedBomItemIds.add(item.bomItemId));
-    }
-  });
-  // Also check from comparison data
-  if (comparison?.items) {
-    comparison.items.forEach((item: any) => {
-      if (item.quotes?.some((q: any) => q.price > 0)) {
-        // This item was quoted by at least one vendor
-      }
-    });
-  }
+  // Use BOM status endpoint for unquoted items
+  const unquotedItems = bomStatuses.filter((item: any) => item.overallStatus === 'AVAILABLE');
+  const rfqSentItems = bomStatuses.filter((item: any) => item.overallStatus === 'RFQ_SENT');
+  const quotedItemsList = bomStatuses.filter((item: any) => item.overallStatus === 'QUOTED');
+  const awardedItems = bomStatuses.filter((item: any) => item.overallStatus === 'AWARDED');
 
-  const totalQuoted = quotes.reduce((sum: number, q: any) => sum + (q.totalAmount || 0), 0);
+  // Use computed totals for averages
+  const totalQuoted = quotes.reduce((sum: number, q: any) => sum + (q.computedTotal || 0), 0);
   const avgQuote = quotes.length > 0 ? totalQuoted / quotes.length : 0;
 
   return (
@@ -213,7 +228,7 @@ export default function StepAwardVendors() {
           >
             {tab === 'overview' && 'Vendor Quotes'}
             {tab === 'compare' && 'Compare Line Items'}
-            {tab === 'unquoted' && `Unquoted Materials`}
+            {tab === 'unquoted' && `Unquoted (${unquotedItems.length + rfqSentItems.length})`}
           </button>
         ))}
       </div>
@@ -249,6 +264,8 @@ export default function StepAwardVendors() {
             const detail = quoteDetails[quote.id];
             const isExpanded = expandedQuote === quote.id;
             const isAwarded = quote.status === 'AWARDED';
+            const displayTotal = quote.computedTotal || quote.totalAmount || 0;
+            const itemCount = detail?.items?.length || quote._count?.items || 0;
 
             return (
               <Card key={quote.id} className={cn(isAwarded && 'ring-2 ring-green-500')}>
@@ -262,16 +279,32 @@ export default function StepAwardVendors() {
                             <Trophy className="w-3 h-3 mr-1" /> Awarded
                           </Badge>
                         )}
-                        <Badge variant="secondary">{quote._count?.items || 0} items quoted</Badge>
+                        <Badge variant="secondary">{itemCount} items quoted</Badge>
                       </div>
                       <div className="flex items-center gap-4 text-sm text-muted-foreground">
                         <span>RFQ: {rfq?.rfqNumber || '-'}</span>
                         <span>Received: {new Date(quote.receivedAt || quote.createdAt).toLocaleDateString()}</span>
                         {quote.quoteNumber && <span>Quote #: {quote.quoteNumber}</span>}
                       </div>
+                      {itemCount === 0 && (
+                        <div className="mt-2 flex items-center gap-2 text-xs text-yellow-600">
+                          <AlertTriangle className="w-3 h-3" />
+                          No line items parsed from this quote — PDF may not have been processed
+                        </div>
+                      )}
                     </div>
                     <div className="text-right">
-                      <div className="text-2xl font-bold">${(quote.totalAmount || 0).toLocaleString()}</div>
+                      <div className="text-2xl font-bold">
+                        {itemCount > 0
+                          ? `$${displayTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+                          : <span className="text-muted-foreground text-lg">No data</span>
+                        }
+                      </div>
+                      {itemCount > 0 && displayTotal !== quote.totalAmount && quote.totalAmount > 0 && (
+                        <div className="text-xs text-muted-foreground line-through">
+                          Parsed: ${quote.totalAmount?.toLocaleString()}
+                        </div>
+                      )}
                       <div className="flex gap-2 mt-2">
                         <Button
                           size="sm"
@@ -282,7 +315,7 @@ export default function StepAwardVendors() {
                           {isExpanded ? 'Hide' : 'View'} Details
                           {isExpanded ? <ChevronDown className="w-4 h-4 ml-1" /> : <ChevronRight className="w-4 h-4 ml-1" />}
                         </Button>
-                        {!isAwarded && quote.status !== 'REJECTED' && (
+                        {!isAwarded && quote.status !== 'REJECTED' && itemCount > 0 && (
                           <Button
                             size="sm"
                             onClick={() => awardVendor(quote.id)}
@@ -335,12 +368,26 @@ export default function StepAwardVendors() {
                                 <TableCell className="text-sm text-muted-foreground">{item.notes || '-'}</TableCell>
                               </TableRow>
                             ))}
+                            <TableRow className="font-bold border-t-2">
+                              <TableCell colSpan={4}>TOTAL</TableCell>
+                              <TableCell className="text-right">
+                                ${detail.items.reduce((sum: number, i: any) => sum + (i.totalPrice || 0), 0).toLocaleString()}
+                              </TableCell>
+                              <TableCell />
+                            </TableRow>
                           </TableBody>
                         </Table>
                       ) : (
-                        <p className="text-sm text-muted-foreground text-center py-4">No line items available for this quote</p>
+                        <div className="text-center py-6 text-muted-foreground">
+                          <AlertTriangle className="w-8 h-8 mx-auto mb-2 text-yellow-500" />
+                          <p className="font-medium">No line items were parsed from this quote</p>
+                          <p className="text-sm mt-1">
+                            The vendor's PDF attachment may not have been received or couldn't be read.
+                            Check that SendGrid Inbound Parse is configured to forward attachments.
+                          </p>
+                        </div>
                       )}
-                      {detail.hasVE && detail.veNotes && (
+                      {detail?.hasVE && detail.veNotes && (
                         <div className="mt-3 bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded p-3 text-sm">
                           <span className="font-medium text-yellow-800 dark:text-yellow-200">Value Engineering Notes:</span>
                           <span className="text-yellow-700 dark:text-yellow-300 ml-2">{detail.veNotes}</span>
@@ -419,14 +466,14 @@ export default function StepAwardVendors() {
                         ))}
                       </TableRow>
                     ))}
-                    {/* Totals row */}
+                    {/* Totals row - computed from line items */}
                     <TableRow className="font-bold border-t-2">
                       <TableCell>TOTAL</TableCell>
                       {comparison.vendors?.map((vendor: string) => {
                         const vendorQuote = quotes.find((q: any) => q.vendor?.name === vendor);
                         return (
                           <TableCell key={vendor} className="text-right">
-                            ${(vendorQuote?.totalAmount || 0).toLocaleString()}
+                            ${(vendorQuote?.computedTotal || 0).toLocaleString()}
                           </TableCell>
                         );
                       })}
@@ -442,106 +489,118 @@ export default function StepAwardVendors() {
       {/* Tab: Unquoted Materials */}
       {activeTab === 'unquoted' && (
         <div className="space-y-4">
-          {(() => {
-            // Get all BOM item IDs that were quoted
-            const allQuotedIds = new Set<string>();
-            quotes.forEach((q: any) => {
-              const detail = quoteDetails[q.id];
-              if (detail?.items) {
-                detail.items.forEach((item: any) => allQuotedIds.add(item.bomItemId));
-              }
-            });
+          {unquotedItems.length === 0 && rfqSentItems.length === 0 && bomStatuses.length > 0 && (
+            <div className="text-center py-12">
+              <CheckCircle2 className="w-16 h-16 mx-auto mb-4 text-green-500" />
+              <p className="text-lg font-semibold">All materials covered</p>
+              <p className="text-muted-foreground mt-1">Every BOM item has a quote or is awarded.</p>
+            </div>
+          )}
 
-            // If we have comparison data, use that instead for quoted items
-            const quotedDescriptions = new Set<string>();
-            if (comparison?.items) {
-              comparison.items.forEach((item: any) => {
-                if (item.quotes?.some((q: any) => q.price > 0)) {
-                  quotedDescriptions.add(item.description?.toLowerCase());
-                }
-              });
-            }
+          {bomStatuses.length === 0 && (
+            <div className="text-center py-12 text-muted-foreground">
+              <p>No BOM items found for this project.</p>
+            </div>
+          )}
 
-            const unquotedItems = bomItems.filter((item: any) => {
-              if (allQuotedIds.has(item.id)) return false;
-              if (quotedDescriptions.has(item.description?.toLowerCase())) return false;
-              return true;
-            });
-
-            if (unquotedItems.length === 0 && bomItems.length > 0) {
-              return (
-                <div className="text-center py-12">
-                  <CheckCircle2 className="w-16 h-16 mx-auto mb-4 text-green-500" />
-                  <p className="text-lg font-semibold">All materials quoted</p>
-                  <p className="text-muted-foreground mt-1">Every BOM item has been covered by at least one vendor quote.</p>
+          {(unquotedItems.length > 0 || rfqSentItems.length > 0) && (
+            <>
+              <div className="bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5" />
+                <div>
+                  <p className="font-medium text-yellow-800 dark:text-yellow-200">
+                    {unquotedItems.length} material{unquotedItems.length !== 1 ? 's' : ''} still need quotes
+                    {rfqSentItems.length > 0 && `, ${rfqSentItems.length} awaiting response`}
+                  </p>
+                  <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                    Request quotes from additional vendors to cover missing materials.
+                  </p>
                 </div>
-              );
-            }
+              </div>
 
-            if (bomItems.length === 0) {
-              return (
-                <div className="text-center py-12 text-muted-foreground">
-                  <p>No BOM items found for this project.</p>
-                </div>
-              );
-            }
-
-            return (
-              <>
-                <div className="bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 flex items-start gap-3">
-                  <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5" />
-                  <div>
-                    <p className="font-medium text-yellow-800 dark:text-yellow-200">
-                      {unquotedItems.length} material{unquotedItems.length > 1 ? 's' : ''} not yet quoted
-                    </p>
-                    <p className="text-sm text-yellow-700 dark:text-yellow-300">
-                      These materials weren't included in any vendor quote. Request quotes from additional vendors to cover them.
-                    </p>
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base">Materials Needing Quotes</CardTitle>
+                    <Button size="sm" onClick={() => setStep('vendors')}>
+                      <ArrowLeft className="w-4 h-4 mr-2" />
+                      Match More Vendors
+                    </Button>
                   </div>
-                </div>
-
-                <Card>
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-base">Unquoted Materials</CardTitle>
-                      <Button size="sm" onClick={() => setStep('vendors')}>
-                        <ArrowLeft className="w-4 h-4 mr-2" />
-                        Match More Vendors
-                      </Button>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Description</TableHead>
-                          <TableHead>Category</TableHead>
-                          <TableHead className="text-right">Qty</TableHead>
-                          <TableHead>UOM</TableHead>
-                          <TableHead className="text-right">Est. Cost</TableHead>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Description</TableHead>
+                        <TableHead>Trade</TableHead>
+                        <TableHead className="text-right">Qty</TableHead>
+                        <TableHead>UOM</TableHead>
+                        <TableHead>Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {[...unquotedItems, ...rfqSentItems].map((item: any) => (
+                        <TableRow key={item.id}>
+                          <TableCell className="font-medium">{item.description}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{item.trade || '-'}</Badge>
+                          </TableCell>
+                          <TableCell className="text-right">{item.finalQty?.toFixed(2)}</TableCell>
+                          <TableCell>{item.uom}</TableCell>
+                          <TableCell>
+                            {item.overallStatus === 'AVAILABLE' && (
+                              <Badge variant="outline" className="text-xs">No RFQ</Badge>
+                            )}
+                            {item.overallStatus === 'RFQ_SENT' && (
+                              <Badge className="text-xs bg-blue-600 text-white">
+                                RFQ Sent
+                                {item.rfqs?.length > 0 && ` (${item.rfqs.map((r: any) => r.vendorName).join(', ')})`}
+                              </Badge>
+                            )}
+                          </TableCell>
                         </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {unquotedItems.map((item: any) => (
-                          <TableRow key={item.id}>
-                            <TableCell className="font-medium">{item.description}</TableCell>
-                            <TableCell>
-                              <Badge variant="outline">{item.material?.trade || item.csiDivision || '-'}</Badge>
-                            </TableCell>
-                            <TableCell className="text-right">{item.finalQty?.toFixed(2)}</TableCell>
-                            <TableCell>{item.uom}</TableCell>
-                            <TableCell className="text-right">
-                              {item.totalCost ? `$${item.totalCost.toLocaleString()}` : '-'}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </CardContent>
-                </Card>
-              </>
-            );
-          })()}
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </>
+          )}
+
+          {/* Show awarded items for reference */}
+          {awardedItems.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base text-green-700">Awarded Materials ({awardedItems.length})</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Description</TableHead>
+                      <TableHead>Awarded To</TableHead>
+                      <TableHead className="text-right">Price</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {awardedItems.map((item: any) => {
+                      const awardedQuote = item.quotes?.find((q: any) => q.status === 'AWARDED');
+                      return (
+                        <TableRow key={item.id}>
+                          <TableCell className="font-medium">{item.description}</TableCell>
+                          <TableCell>{awardedQuote?.vendorName || '-'}</TableCell>
+                          <TableCell className="text-right font-semibold">
+                            {awardedQuote?.totalPrice ? `$${awardedQuote.totalPrice.toLocaleString()}` : '-'}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
     </div>
