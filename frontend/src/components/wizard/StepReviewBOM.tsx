@@ -26,6 +26,9 @@ import {
   X,
   FileText,
 } from 'lucide-react';
+import PlanViewer from '../plan-viewer/PlanViewer';
+import MeasurementTools from '../plan-viewer/MeasurementTools';
+import MaterialsPanel from '../plan-viewer/MaterialsPanel';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -81,6 +84,9 @@ export default function StepReviewBOM() {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
+  const [activeTool, setActiveTool] = useState<'none' | 'length' | 'area' | 'count' | 'scale'>('none');
+  const [measurements, setMeasurements] = useState<{ id: string; type: 'length' | 'area' | 'count'; value: number; unit: string; label: string }[]>([]);
+  const [bomItems, setBomItems] = useState<any[]>([]);
   const editInputRef = useRef<HTMLInputElement>(null);
 
   const [newItem, setNewItem] = useState<Partial<MaterialItem>>({
@@ -186,6 +192,40 @@ export default function StepReviewBOM() {
     } finally {
       setPdfLoading(false);
     }
+  };
+
+  const loadBomItems = async () => {
+    if (!projectId) return;
+    try {
+      const res = await axios.get(`${API_URL}/bom?projectId=${projectId}`);
+      const items = (res.data?.items || []).map((item: any) => ({
+        id: item.id,
+        description: item.description,
+        quantity: item.finalQty || item.quantity,
+        uom: item.uom,
+        trade: item.material?.trade || item.category?.charAt(0)?.toUpperCase() || 'A',
+        confidence: item.confidence,
+        category: item.category,
+        unitCost: item.unitCost,
+        wasteFactor: item.wasteFactor,
+      }));
+      setBomItems(items);
+    } catch { /* non-critical */ }
+  };
+
+  useEffect(() => {
+    if (projectId) loadBomItems();
+  }, [projectId]);
+
+  const handleMeasurementComplete = (type: string, value: number) => {
+    setMeasurements(prev => [...prev, {
+      id: `m-${Date.now()}`,
+      type: type as 'length' | 'area' | 'count',
+      value,
+      unit: type === 'length' ? 'LF' : type === 'area' ? 'SF' : 'items',
+      label: `${type.charAt(0).toUpperCase() + type.slice(1)} ${prev.filter(m => m.type === type).length + 1}`,
+    }]);
+    if (type !== 'count') setActiveTool('none');
   };
 
   const toggleExpand = (idx: number) => {
@@ -667,29 +707,48 @@ export default function StepReviewBOM() {
         </div>
       </div>
 
-      {/* PDF Viewer Dialog */}
+      {/* PDF Viewer Dialog with Measurement Tools and Materials Panel */}
       <Dialog open={showPlanViewer} onOpenChange={setShowPlanViewer}>
-        <DialogContent className="max-w-[90vw] w-[90vw] h-[85vh] flex flex-col p-0">
-          <DialogHeader className="px-6 pt-6 pb-0">
+        <DialogContent className="max-w-[95vw] w-[95vw] h-[90vh] flex flex-col p-0">
+          <DialogHeader className="px-4 pt-4 pb-0">
             <DialogTitle>Uploaded Plans</DialogTitle>
-            <DialogDescription>Review your uploaded construction documents</DialogDescription>
+            <DialogDescription>Measure, review materials, and add items</DialogDescription>
           </DialogHeader>
-          <div className="flex-1 min-h-0 px-6 pb-6">
+          <div className="flex-1 min-h-0 flex flex-col">
             {pdfLoading ? (
-              <div className="flex items-center justify-center h-full">
+              <div className="flex items-center justify-center flex-1">
                 <div className="text-center">
                   <Loader2 className="w-10 h-10 animate-spin text-muted-foreground mx-auto mb-4" />
                   <p className="text-muted-foreground">Loading PDF...</p>
                 </div>
               </div>
             ) : pdfUrl ? (
-              <iframe
-                src={pdfUrl}
-                className="w-full h-full rounded-md border"
-                title="Plan PDF Viewer"
-              />
+              <>
+                <MeasurementTools
+                  activeTool={activeTool}
+                  onToolChange={setActiveTool}
+                  measurements={measurements}
+                  onClearMeasurements={() => setMeasurements([])}
+                />
+                <div className="flex-1 flex min-h-0">
+                  <div className="w-[65%]">
+                    <PlanViewer
+                      pdfUrl={pdfUrl}
+                      activeTool={activeTool}
+                      onMeasurementComplete={handleMeasurementComplete}
+                    />
+                  </div>
+                  <div className="w-[35%]">
+                    <MaterialsPanel
+                      materials={bomItems}
+                      projectId={projectId || undefined}
+                      onBomChange={loadBomItems}
+                    />
+                  </div>
+                </div>
+              </>
             ) : (
-              <div className="flex items-center justify-center h-full text-muted-foreground">
+              <div className="flex items-center justify-center flex-1 text-muted-foreground">
                 <div className="text-center">
                   <FileText className="w-16 h-16 mx-auto mb-4 opacity-50" />
                   <p>{pdfError || 'No PDF available for this project'}</p>

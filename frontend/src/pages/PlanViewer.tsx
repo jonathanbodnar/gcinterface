@@ -73,13 +73,7 @@ export default function PlanViewerPage() {
   const filterMaterialsByPage = () => {
     if (!bom?.items) return;
 
-    // For now, distribute materials across pages
-    // In production, this would filter by actual page number from takeoff
-    const itemsPerPage = Math.ceil(bom.items.length / 15); // Assuming 15 pages
-    const startIdx = (currentPage - 1) * itemsPerPage;
-    const endIdx = startIdx + itemsPerPage;
-    
-    const pageMaterials = bom.items.slice(startIdx, endIdx).map((item: any) => ({
+    const allMaterials = bom.items.map((item: any) => ({
       id: item.id,
       description: item.description,
       quantity: item.finalQty || item.quantity,
@@ -87,31 +81,12 @@ export default function PlanViewerPage() {
       trade: item.material?.trade || 'A',
       confidence: item.confidence,
       category: item.category,
+      unitCost: item.unitCost,
+      wasteFactor: item.wasteFactor,
     }));
 
-    setMaterialsOnPage(pageMaterials);
-    
-    // Generate mock highlights for demo
-    // In production, these would come from feature locations in the database
-    const mockHighlights = pageMaterials.map((material: any, index: number) => {
-      const yOffset = 50 + (index * 80); // Stagger vertically
-      const xOffset = 100 + (index % 3) * 150; // Distribute horizontally
-      
-      return {
-        id: material.id,
-        type: 'rectangle' as const,
-        coordinates: {
-          x: xOffset,
-          y: yOffset,
-          width: 120,
-          height: 60,
-        },
-        color: tradeColors[material.trade] || tradeColors.A,
-        label: material.description.substring(0, 20),
-      };
-    });
-    
-    setHighlights(mockHighlights);
+    setMaterialsOnPage(allMaterials);
+    setHighlights([]);
   };
 
   const handleMaterialHover = (materialId: string | null) => {
@@ -223,9 +198,11 @@ export default function PlanViewerPage() {
             <MaterialsPanel
               materials={materialsOnPage}
               currentPage={currentPage}
+              projectId={id}
               onMaterialHover={handleMaterialHover}
               onMaterialClick={handleMaterialClick}
               selectedMaterialId={selectedMaterialId}
+              onBomChange={loadProjectData}
             />
             </div>
           </div>

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, Query, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Request } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { BOMGeneratorService } from './bom-generator.service';
 import { PrismaService } from '@/common/prisma/prisma.service';
@@ -143,6 +143,91 @@ export class BOMController {
         quotes: quoteStatuses,
       };
     });
+  }
+
+  @Post()
+  @ApiOperation({ summary: 'Create a new BOM item' })
+  async createBOMItem(@Body() body: {
+    projectId: string;
+    description: string;
+    category?: string;
+    quantity: number;
+    uom: string;
+    unitCost?: number;
+    wasteFactor?: number;
+    notes?: string;
+  }) {
+    const wasteFactor = body.wasteFactor ?? 0;
+    const quantity = body.quantity;
+    const finalQty = quantity * (1 + wasteFactor);
+    const unitCost = body.unitCost ?? 0;
+    const totalCost = finalQty * unitCost;
+
+    return this.prisma.bOM.create({
+      data: {
+        projectId: body.projectId,
+        description: body.description,
+        category: body.category || 'General',
+        quantity,
+        uom: body.uom,
+        wasteFactor,
+        finalQty,
+        unitCost,
+        totalCost,
+        notes: body.notes,
+        source: 'manual',
+        confidence: 100,
+      },
+      include: {
+        material: { select: { id: true, name: true, trade: true, category: true } },
+      },
+    });
+  }
+
+  @Put(':id')
+  @ApiOperation({ summary: 'Update a BOM item' })
+  async updateBOMItem(@Param('id') id: string, @Body() body: {
+    description?: string;
+    category?: string;
+    quantity?: number;
+    uom?: string;
+    unitCost?: number;
+    wasteFactor?: number;
+    notes?: string;
+  }) {
+    const existing = await this.prisma.bOM.findUnique({ where: { id } });
+    if (!existing) throw new Error('BOM item not found');
+
+    const quantity = body.quantity ?? existing.quantity;
+    const wasteFactor = body.wasteFactor ?? existing.wasteFactor;
+    const finalQty = quantity * (1 + wasteFactor);
+    const unitCost = body.unitCost ?? existing.unitCost ?? 0;
+    const totalCost = finalQty * unitCost;
+
+    return this.prisma.bOM.update({
+      where: { id },
+      data: {
+        ...(body.description !== undefined && { description: body.description }),
+        ...(body.category !== undefined && { category: body.category }),
+        ...(body.quantity !== undefined && { quantity }),
+        ...(body.uom !== undefined && { uom: body.uom }),
+        ...(body.unitCost !== undefined && { unitCost }),
+        ...(body.wasteFactor !== undefined && { wasteFactor }),
+        ...(body.notes !== undefined && { notes: body.notes }),
+        finalQty,
+        totalCost,
+      },
+      include: {
+        material: { select: { id: true, name: true, trade: true, category: true } },
+      },
+    });
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Delete a BOM item' })
+  async deleteBOMItem(@Param('id') id: string) {
+    await this.prisma.bOM.delete({ where: { id } });
+    return { success: true };
   }
 
   @Post('generate/:projectId')
