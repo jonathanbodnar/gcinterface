@@ -121,7 +121,6 @@ export default function StepAwardVendors() {
   }
 
   const sentRfqs = rfqs.filter((r: any) => r.status === 'SENT' || r.status === 'RESPONDED');
-  const respondedRfqs = rfqs.filter((r: any) => r.status === 'RESPONDED');
   const awardedQuotes = quotes.filter((q: any) => q.status === 'AWARDED');
 
   // Identify unquoted BOM items
