@@ -151,7 +151,6 @@ export default function StepAwardVendors() {
   // Use BOM status endpoint for unquoted items
   const unquotedItems = bomStatuses.filter((item: any) => item.overallStatus === 'AVAILABLE');
   const rfqSentItems = bomStatuses.filter((item: any) => item.overallStatus === 'RFQ_SENT');
-  const quotedItemsList = bomStatuses.filter((item: any) => item.overallStatus === 'QUOTED');
   const awardedItems = bomStatuses.filter((item: any) => item.overallStatus === 'AWARDED');
 
   // Use computed totals for averages

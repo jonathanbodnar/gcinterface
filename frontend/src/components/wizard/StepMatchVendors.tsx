@@ -38,7 +38,7 @@ export default function StepMatchVendors() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [bomStatusRes, vendorsRes, savedVendorsRes] = await Promise.all([
+      const [bomStatusRes, , savedVendorsRes] = await Promise.all([
         axios.get(`${API_URL}/bom/status?projectId=${projectId}`).catch(() => ({ data: [] })),
         loadVendors(),
         axios.get(`${API_URL}/projects/${projectId}/selected-vendors`).catch(() => ({ data: { vendors: [] } })),
@@ -115,7 +115,6 @@ export default function StepMatchVendors() {
   const awardedItems = bomStatuses.filter(b => b.overallStatus === 'AWARDED');
   const rfqItems = bomStatuses.filter(b => b.overallStatus === 'RFQ_SENT');
   const quotedItems = bomStatuses.filter(b => b.overallStatus === 'QUOTED');
-  const availableItems = bomStatuses.filter(b => b.overallStatus === 'AVAILABLE');
 
   const filteredItems = statusFilter === 'all'
     ? matchableItems
