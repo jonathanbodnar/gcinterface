@@ -684,20 +684,39 @@ export class QuotesService {
     console.log(`📄 Found ${allPrices.length} lines with dollar amounts`);
     allPrices.forEach(p => console.log(`  💲 "${p.line.substring(0, 100)}" => [${p.amounts.join(', ')}]`));
 
+    const UOM_PATTERN = 'SF|LF|EA|SY|CY|CF|GAL|LB|TON|HR|LS|SET|PC|BOX|BAG|ROLL|SHT|BDL|FT|IN|YD|SQFT|LNFT';
+
     for (const line of lines) {
       // Skip header/label lines
       if (/^(item|#|no\.|description|material|qty|quantity|uom|unit|price|total|amount|subtotal)\s*$/i.test(line)) continue;
       if (/^(date|from|to|phone|fax|email|address|page|quote|proposal|estimate|terms)/i.test(line)) continue;
+      if (/^Item\s+Description/i.test(line)) continue;
 
       let matched = false;
 
-      // Pattern: "ItemNum  Description  Qty UOM  $Price/UOM  ~$Total"
-      const p1 = line.match(/^(\d+)\s+(.+?)\s+([\d,.]+)\s+(SF|LF|EA|SY|CY|CF|GAL|LB|TON|HR|LS|SET|PC|BOX|BAG|ROLL|SHT|BDL)\s+\$?([\d,]+\.?\d*)\s*(?:\/\s*\w+\s*)?[~≈]?\$?([\d,]+\.?\d*)/i);
-      if (p1) {
-        const [, , desc, qty, uom, unitP, total] = p1;
-        items.push({ description: desc.trim(), quantity: parseFloat(qty.replace(/,/g, '')), uom: uom.toUpperCase(), unitPrice: parseFloat(unitP.replace(/,/g, '')), totalPrice: parseFloat(total.replace(/,/g, '')) });
-        totalAmount += parseFloat(total.replace(/,/g, ''));
+      // Pattern 0 (HIGHEST PRIORITY): Concatenated PDF format with NO spaces
+      // "1   4-inch Rubber Base Molding1.05LF$2.25"
+      // ItemNum + spaces + Description (no space) Qty (no space) UOM (no space) $Price
+      const p0 = line.match(new RegExp(`^(\\d+)\\s+(.+?)(\\d+\\.?\\d*)(${UOM_PATTERN})\\$(\\d[\\d,]*\\.?\\d*)$`, 'i'));
+      if (p0) {
+        const [, , desc, qty, uom, unitP] = p0;
+        const qtyVal = parseFloat(qty);
+        const priceVal = parseFloat(unitP.replace(/,/g, ''));
+        const totalP = qtyVal * priceVal;
+        items.push({ description: desc.trim(), quantity: qtyVal, uom: uom.toUpperCase(), unitPrice: priceVal, totalPrice: totalP });
+        totalAmount += totalP;
         matched = true;
+      }
+
+      // Pattern 1: Spaced format "ItemNum  Description  Qty UOM  $Price/UOM  ~$Total"
+      if (!matched) {
+        const p1 = line.match(new RegExp(`^(\\d+)\\s+(.+?)\\s+([\\d,.]+)\\s+(${UOM_PATTERN})\\s+\\$?([\\d,]+\\.?\\d*)\\s*(?:\\/\\s*\\w+\\s*)?[~≈]?\\$?([\\d,]+\\.?\\d*)`, 'i'));
+        if (p1) {
+          const [, , desc, qty, uom, unitP, total] = p1;
+          items.push({ description: desc.trim(), quantity: parseFloat(qty.replace(/,/g, '')), uom: uom.toUpperCase(), unitPrice: parseFloat(unitP.replace(/,/g, '')), totalPrice: parseFloat(total.replace(/,/g, '')) });
+          totalAmount += parseFloat(total.replace(/,/g, ''));
+          matched = true;
+        }
       }
 
       // Pattern: "Description  Qty  UOM  $UnitPrice  $TotalPrice" (no item number)
