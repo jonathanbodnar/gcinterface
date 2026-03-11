@@ -170,11 +170,16 @@ export class WebhooksController {
           content: att.content,
         }));
 
+        const toAddr = parsed.to
+          ? (Array.isArray(parsed.to) ? parsed.to[0]?.text : parsed.to?.text) || ''
+          : '';
+        const htmlBody = parsed.html ? String(parsed.html).replace(/<[^>]+>/g, ' ') : '';
+
         return {
           from: parsed.from?.text || payload.from || '',
-          to: parsed.to?.text || payload.to || '',
+          to: toAddr || payload.to || '',
           subject: parsed.subject || payload.subject || '',
-          body: parsed.text || parsed.html?.replace(/<[^>]+>/g, ' ') || '',
+          body: parsed.text || htmlBody || '',
           attachments,
         };
       } catch (err) {
