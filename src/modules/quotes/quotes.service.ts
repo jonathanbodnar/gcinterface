@@ -111,13 +111,8 @@ export class QuotesService {
         const fromEmail = this.configService.get('SENDGRID_FROM_EMAIL') || 'noreply@gclegacy.com';
         const fromName = this.configService.get('SENDGRID_FROM_NAME') || 'GC Legacy Construction';
 
-        const template = await this.prisma.emailTemplate.findFirst({
-          where: { type: 'AWARD', active: true },
-          orderBy: { createdAt: 'desc' },
-        });
-
         const itemTotal = quote.items.reduce((sum, i) => sum + (i.totalPrice || 0), 0);
-        const emailBody = this.generateAwardEmail(quote, orderNumber, itemTotal, template);
+        const emailBody = this.generateAwardEmail(quote, orderNumber, itemTotal);
 
         await sgMail.send({
           to: quote.vendor.email,
@@ -156,41 +151,97 @@ export class QuotesService {
     };
   }
 
-  private generateAwardEmail(quote: any, orderNumber: string, itemTotal: number, template: any): string {
-    if (template?.body) {
-      return template.body
-        .replace(/\{\{VENDOR_NAME\}\}/g, quote.vendor.name)
-        .replace(/\{\{PROJECT_NAME\}\}/g, quote.project.name)
-        .replace(/\{\{ORDER_NUMBER\}\}/g, orderNumber)
-        .replace(/\{\{TOTAL\}\}/g, `$${itemTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
-    }
+  private generateAwardEmail(quote: any, orderNumber: string, itemTotal: number): string {
+    const formattedTotal = itemTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const itemCount = quote.items.length;
+
+    const itemRows = quote.items.map((item: any, idx: number) => {
+      const qty = item.quantity ?? 0;
+      const uom = item.uom || 'EA';
+      const unit = (item.unitPrice ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const total = (item.totalPrice ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const bg = idx % 2 === 0 ? '#ffffff' : '#f9fafb';
+      return `
+        <tr style="background:${bg};">
+          <td style="padding:8px 12px; border:1px solid #e5e7eb; font-size:13px;">${item.description || '—'}</td>
+          <td style="padding:8px 12px; border:1px solid #e5e7eb; text-align:center; font-size:13px;">${qty}</td>
+          <td style="padding:8px 12px; border:1px solid #e5e7eb; text-align:center; font-size:13px;">${uom}</td>
+          <td style="padding:8px 12px; border:1px solid #e5e7eb; text-align:right; font-size:13px;">$${unit}</td>
+          <td style="padding:8px 12px; border:1px solid #e5e7eb; text-align:right; font-size:13px;">$${total}</td>
+        </tr>`;
+    }).join('');
 
     return `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #1a1a1a;">Purchase Order — ${quote.project.name}</h2>
-        <p>Dear ${quote.vendor.name},</p>
-        <p>We are pleased to inform you that your quote has been accepted for the project <strong>${quote.project.name}</strong>.</p>
-        <p>Please find the attached Purchase Order (<strong>${orderNumber}</strong>) detailing the awarded materials and pricing.</p>
-        <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
-          <tr style="background: #f5f5f5;">
-            <td style="padding: 10px; border: 1px solid #ddd;"><strong>Order Number</strong></td>
-            <td style="padding: 10px; border: 1px solid #ddd;">${orderNumber}</td>
-          </tr>
-          <tr>
-            <td style="padding: 10px; border: 1px solid #ddd;"><strong>Project</strong></td>
-            <td style="padding: 10px; border: 1px solid #ddd;">${quote.project.name}</td>
-          </tr>
-          <tr style="background: #f5f5f5;">
-            <td style="padding: 10px; border: 1px solid #ddd;"><strong>Items</strong></td>
-            <td style="padding: 10px; border: 1px solid #ddd;">${quote.items.length} line items</td>
-          </tr>
-          <tr>
-            <td style="padding: 10px; border: 1px solid #ddd;"><strong>Total</strong></td>
-            <td style="padding: 10px; border: 1px solid #ddd;"><strong>$${itemTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></td>
-          </tr>
-        </table>
-        <p>Please review the attached PDF and confirm receipt. If you have any questions, reply to this email.</p>
-        <p>Thank you,<br/>GC Legacy Construction</p>
+      <div style="font-family: Arial, Helvetica, sans-serif; max-width: 700px; margin: 0 auto; color: #1a1a1a;">
+        <div style="background: #1e3a5f; padding: 24px 30px; border-radius: 8px 8px 0 0;">
+          <h1 style="color: #ffffff; margin: 0; font-size: 22px;">Purchase Order ${orderNumber}</h1>
+          <p style="color: #cbd5e1; margin: 6px 0 0; font-size: 14px;">${quote.project.name}</p>
+        </div>
+
+        <div style="padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px;">
+          <p style="font-size: 15px; line-height: 1.6;">Dear ${quote.vendor.name},</p>
+          <p style="font-size: 15px; line-height: 1.6;">
+            We are pleased to confirm that your quote for <strong>${quote.project.name}</strong> has been accepted. 
+            The attached Purchase Order PDF contains the full details for your records.
+          </p>
+
+          <table style="width: 100%; border-collapse: collapse; margin: 24px 0 8px;">
+            <tr style="background: #f1f5f9;">
+              <td style="padding: 10px 14px; border: 1px solid #e5e7eb; font-size: 13px; color: #64748b;">Order #</td>
+              <td style="padding: 10px 14px; border: 1px solid #e5e7eb; font-size: 14px; font-weight: 600;">${orderNumber}</td>
+              <td style="padding: 10px 14px; border: 1px solid #e5e7eb; font-size: 13px; color: #64748b;">Project</td>
+              <td style="padding: 10px 14px; border: 1px solid #e5e7eb; font-size: 14px; font-weight: 600;">${quote.project.name}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px 14px; border: 1px solid #e5e7eb; font-size: 13px; color: #64748b;">Items</td>
+              <td style="padding: 10px 14px; border: 1px solid #e5e7eb; font-size: 14px;">${itemCount} line items</td>
+              <td style="padding: 10px 14px; border: 1px solid #e5e7eb; font-size: 13px; color: #64748b;">Total</td>
+              <td style="padding: 10px 14px; border: 1px solid #e5e7eb; font-size: 14px; font-weight: 700; color: #16a34a;">$${formattedTotal}</td>
+            </tr>
+          </table>
+
+          <h3 style="font-size: 15px; margin: 28px 0 12px; border-bottom: 2px solid #e5e7eb; padding-bottom: 6px;">Order Summary</h3>
+          <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+              <tr style="background: #1e3a5f;">
+                <th style="padding:8px 12px; border:1px solid #e5e7eb; text-align:left; font-size:12px; color:#fff; font-weight:600;">Description</th>
+                <th style="padding:8px 12px; border:1px solid #e5e7eb; text-align:center; font-size:12px; color:#fff; font-weight:600;">Qty</th>
+                <th style="padding:8px 12px; border:1px solid #e5e7eb; text-align:center; font-size:12px; color:#fff; font-weight:600;">UOM</th>
+                <th style="padding:8px 12px; border:1px solid #e5e7eb; text-align:right; font-size:12px; color:#fff; font-weight:600;">Unit Price</th>
+                <th style="padding:8px 12px; border:1px solid #e5e7eb; text-align:right; font-size:12px; color:#fff; font-weight:600;">Total</th>
+              </tr>
+            </thead>
+            <tbody>${itemRows}</tbody>
+            <tfoot>
+              <tr style="background: #f1f5f9;">
+                <td colspan="4" style="padding:10px 12px; border:1px solid #e5e7eb; text-align:right; font-size:14px; font-weight:700;">Grand Total</td>
+                <td style="padding:10px 12px; border:1px solid #e5e7eb; text-align:right; font-size:14px; font-weight:700; color:#16a34a;">$${formattedTotal}</td>
+              </tr>
+            </tfoot>
+          </table>
+
+          <div style="background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 6px; padding: 16px 20px; margin: 28px 0 20px;">
+            <p style="margin: 0 0 8px; font-size: 14px; font-weight: 600;">Next Steps</p>
+            <ol style="margin: 0; padding-left: 20px; font-size: 14px; line-height: 1.8; color: #475569;">
+              <li>Review the attached Purchase Order PDF</li>
+              <li>Confirm receipt by replying to this email</li>
+              <li>Coordinate delivery schedule with our project team</li>
+            </ol>
+          </div>
+
+          <p style="font-size: 14px; line-height: 1.6; color: #475569;">
+            If you have any questions or need to discuss changes, please reply directly to this email.
+          </p>
+
+          <p style="font-size: 15px; margin-top: 24px;">
+            Thank you,<br/>
+            <strong>GC Legacy Construction</strong>
+          </p>
+        </div>
+
+        <div style="text-align: center; padding: 16px; font-size: 11px; color: #94a3b8;">
+          This is an automated purchase order from GC Legacy Construction.
+        </div>
       </div>
     `;
   }
