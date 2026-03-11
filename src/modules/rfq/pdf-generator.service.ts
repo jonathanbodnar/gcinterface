@@ -188,5 +188,139 @@ export class PDFGeneratorService {
       }
     });
   }
+
+  async generateOrderPDF(quoteId: string): Promise<Buffer> {
+    this.logger.log(`Generating Order PDF for quote ${quoteId}`);
+
+    const quote = await this.prisma.quote.findUnique({
+      where: { id: quoteId },
+      include: {
+        project: true,
+        vendor: true,
+        items: {
+          where: { unitPrice: { gt: 0 } },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    });
+
+    if (!quote) throw new Error('Quote not found');
+
+    const orderNumber = `PO-${quote.quoteNumber || quote.id.slice(-8)}`;
+
+    return new Promise((resolve, reject) => {
+      try {
+        const doc = new PDFDocument({ size: 'LETTER', margin: 50 });
+        const chunks: Buffer[] = [];
+
+        doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+        doc.on('end', () => {
+          this.logger.log(`Order PDF generated for quote ${quoteId}`);
+          resolve(Buffer.concat(chunks));
+        });
+        doc.on('error', (error: Error) => reject(error));
+
+        // Header
+        doc.fontSize(20).text('PURCHASE ORDER', { align: 'center' });
+        doc.moveDown();
+        doc.fontSize(12).text(orderNumber, { align: 'center' });
+        doc.fontSize(9).text(`Date: ${new Date().toLocaleDateString()}`, { align: 'center' });
+        doc.moveDown(2);
+
+        // Project Information
+        doc.fontSize(14).text('Project Information', { underline: true });
+        doc.moveDown(0.5);
+        doc.fontSize(10);
+        doc.text(`Project: ${quote.project.name}`);
+        if (quote.project.location) doc.text(`Location: ${quote.project.location}`);
+        doc.moveDown(1.5);
+
+        // Vendor Information
+        doc.fontSize(14).text('Awarded To:', { underline: true });
+        doc.moveDown(0.5);
+        doc.fontSize(10);
+        doc.text(quote.vendor.name);
+        if (quote.vendor.address) doc.text(quote.vendor.address);
+        if (quote.vendor.email) doc.text(`Email: ${quote.vendor.email}`);
+        if (quote.vendor.phone) doc.text(`Phone: ${quote.vendor.phone}`);
+        doc.moveDown(2);
+
+        // Items Table
+        doc.fontSize(14).text('Order Items', { underline: true });
+        doc.moveDown(1);
+
+        const tableTop = doc.y;
+        const itemCol = 50;
+        const descCol = 80;
+        const qtyCol = 310;
+        const uomCol = 360;
+        const unitCol = 400;
+        const totalCol = 480;
+
+        doc.fontSize(8).fillColor('black');
+        doc.text('#', itemCol, tableTop, { width: 25 });
+        doc.text('Description', descCol, tableTop, { width: 220 });
+        doc.text('Qty', qtyCol, tableTop, { width: 40, align: 'right' });
+        doc.text('UOM', uomCol, tableTop, { width: 35 });
+        doc.text('Unit Price', unitCol, tableTop, { width: 70, align: 'right' });
+        doc.text('Total', totalCol, tableTop, { width: 70, align: 'right' });
+
+        doc.moveTo(itemCol, tableTop + 14)
+           .lineTo(550, tableTop + 14)
+           .stroke();
+
+        let y = tableTop + 22;
+        let grandTotal = 0;
+
+        quote.items.forEach((item, index) => {
+          if (y > 700) {
+            doc.addPage();
+            y = 50;
+          }
+
+          doc.fontSize(8);
+          doc.text((index + 1).toString(), itemCol, y, { width: 25 });
+          doc.text(item.description, descCol, y, { width: 220 });
+          doc.text(item.quantity.toFixed(2), qtyCol, y, { width: 40, align: 'right' });
+          doc.text(item.uom, uomCol, y, { width: 35 });
+          doc.text(`$${item.unitPrice.toFixed(2)}`, unitCol, y, { width: 70, align: 'right' });
+          doc.text(`$${item.totalPrice.toFixed(2)}`, totalCol, y, { width: 70, align: 'right' });
+
+          grandTotal += item.totalPrice;
+          y += 25;
+        });
+
+        // Grand total row
+        y += 5;
+        doc.moveTo(unitCol, y).lineTo(550, y).stroke();
+        y += 8;
+        doc.fontSize(10).text('TOTAL:', unitCol - 60, y, { width: 60, align: 'right' });
+        doc.fontSize(10).text(`$${grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, totalCol, y, { width: 70, align: 'right' });
+
+        // Terms
+        if (doc.y > 600) doc.addPage();
+        doc.moveDown(4);
+        doc.fontSize(12).text('Terms & Conditions', { underline: true });
+        doc.moveDown(0.5);
+        doc.fontSize(9);
+        doc.list([
+          'Pricing is per the vendor quote received and accepted',
+          'Delivery to project site unless otherwise noted',
+          'Payment terms: Net 30 from date of delivery',
+          'All materials must meet project specifications',
+          'Vendor to provide submittal data prior to delivery',
+        ]);
+
+        doc.moveDown(2);
+        doc.text('GC Legacy Construction');
+        doc.text(`Order Date: ${new Date().toLocaleDateString()}`);
+
+        doc.end();
+      } catch (error) {
+        this.logger.error(`Failed to generate Order PDF: ${error.message}`, error.stack);
+        reject(error);
+      }
+    });
+  }
 }
 

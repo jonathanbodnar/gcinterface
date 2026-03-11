@@ -22,6 +22,9 @@ import {
   Eye,
   Pencil,
   Save,
+  Trash2,
+  Mail,
+  MailX,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -42,6 +45,8 @@ export default function StepAwardVendors() {
   const [editingItem, setEditingItem] = useState<string | null>(null);
   const [editPrice, setEditPrice] = useState('');
   const [savingItem, setSavingItem] = useState<string | null>(null);
+  const [deletingItem, setDeletingItem] = useState<string | null>(null);
+  const [awardResult, setAwardResult] = useState<{ quoteId: string; emailSent: boolean; message: string } | null>(null);
 
   useEffect(() => {
     if (projectId) loadData();
@@ -130,10 +135,30 @@ export default function StepAwardVendors() {
     }
   }, [editPrice, projectId]);
 
+  const removeItem = async (itemId: string) => {
+    if (!window.confirm('Remove this item from the quote? This cannot be undone.')) return;
+    setDeletingItem(itemId);
+    try {
+      await axios.delete(`${API_URL}/quotes/items/${itemId}`);
+      setQuoteDetails({});
+      await loadData();
+    } catch (err) {
+      console.error('Failed to remove item:', err);
+    } finally {
+      setDeletingItem(null);
+    }
+  };
+
   const awardVendor = async (quoteId: string) => {
     setAwarding(quoteId);
+    setAwardResult(null);
     try {
-      await axios.post(`${API_URL}/quotes/${quoteId}/select-winner`);
+      const res = await axios.post(`${API_URL}/quotes/${quoteId}/select-winner`);
+      setAwardResult({
+        quoteId,
+        emailSent: res.data.emailSent,
+        message: res.data.message,
+      });
       await loadData();
     } catch (err) {
       console.error('Failed to award vendor:', err);
@@ -344,6 +369,23 @@ export default function StepAwardVendors() {
                     </div>
                   </div>
 
+                  {/* Award email status */}
+                  {awardResult && awardResult.quoteId === quote.id && (
+                    <div className={cn(
+                      'mt-3 rounded-lg p-3 flex items-center gap-2 text-sm',
+                      awardResult.emailSent
+                        ? 'bg-green-50 dark:bg-green-950 text-green-800 dark:text-green-200 border border-green-200 dark:border-green-800'
+                        : 'bg-yellow-50 dark:bg-yellow-950 text-yellow-800 dark:text-yellow-200 border border-yellow-200 dark:border-yellow-800'
+                    )}>
+                      {awardResult.emailSent ? (
+                        <Mail className="w-4 h-4 flex-shrink-0" />
+                      ) : (
+                        <MailX className="w-4 h-4 flex-shrink-0" />
+                      )}
+                      <span>{awardResult.message}</span>
+                    </div>
+                  )}
+
                   {/* Expanded quote line items with inline editing */}
                   {isExpanded && (
                     <div className="mt-4 border-t pt-4">
@@ -421,17 +463,35 @@ export default function StepAwardVendors() {
                                         </Button>
                                       </div>
                                     ) : (
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        className="h-7 w-7 p-0"
-                                        onClick={() => {
-                                          setEditingItem(item.id);
-                                          setEditPrice(item.unitPrice > 0 ? item.unitPrice.toString() : '');
-                                        }}
-                                      >
-                                        <Pencil className="w-3 h-3" />
-                                      </Button>
+                                      <div className="flex gap-1">
+                                        {!isAwarded && (
+                                          <>
+                                            <Button
+                                              size="sm"
+                                              variant="ghost"
+                                              className="h-7 w-7 p-0"
+                                              onClick={() => {
+                                                setEditingItem(item.id);
+                                                setEditPrice(item.unitPrice > 0 ? item.unitPrice.toString() : '');
+                                              }}
+                                            >
+                                              <Pencil className="w-3 h-3" />
+                                            </Button>
+                                            <Button
+                                              size="sm"
+                                              variant="ghost"
+                                              className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                                              onClick={() => removeItem(item.id)}
+                                              disabled={deletingItem === item.id}
+                                            >
+                                              {deletingItem === item.id
+                                                ? <Loader2 className="w-3 h-3 animate-spin" />
+                                                : <Trash2 className="w-3 h-3" />
+                                              }
+                                            </Button>
+                                          </>
+                                        )}
+                                      </div>
                                     )}
                                   </TableCell>
                                 </TableRow>

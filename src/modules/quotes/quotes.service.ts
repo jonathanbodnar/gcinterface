@@ -1,11 +1,27 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '@/common/prisma/prisma.service';
+import { PDFGeneratorService } from '../rfq/pdf-generator.service';
+import * as sgMail from '@sendgrid/mail';
 import * as xlsx from 'xlsx';
 import * as pdfParse from 'pdf-parse';
 
 @Injectable()
 export class QuotesService {
-  constructor(private prisma: PrismaService) {}
+  private readonly logger = new Logger(QuotesService.name);
+  private sendgridConfigured = false;
+
+  constructor(
+    private prisma: PrismaService,
+    private configService: ConfigService,
+    private pdfGenerator: PDFGeneratorService,
+  ) {
+    const apiKey = this.configService.get('SENDGRID_API_KEY');
+    if (apiKey) {
+      sgMail.setApiKey(apiKey);
+      this.sendgridConfigured = true;
+    }
+  }
 
   async listByProject(projectId: string) {
     const quotes = await this.prisma.quote.findMany({
@@ -63,6 +79,11 @@ export class QuotesService {
     const quote = await this.prisma.quote.update({
       where: { id: quoteId },
       data: { status: 'AWARDED' },
+      include: {
+        vendor: true,
+        project: true,
+        items: { where: { unitPrice: { gt: 0 } } },
+      },
     });
 
     // Check if ALL quotes for the project are now awarded
@@ -77,11 +98,101 @@ export class QuotesService {
       data: { status: allAwarded ? 'AWARDED' : 'AWARD_PENDING' },
     });
 
+    // Send award email with order PDF
+    let emailSent = false;
+    let emailError: string | null = null;
+
+    if (this.sendgridConfigured && quote.vendor.email) {
+      try {
+        const pdfBuffer = await this.pdfGenerator.generateOrderPDF(quoteId);
+        const pdfBase64 = pdfBuffer.toString('base64');
+
+        const orderNumber = `PO-${quote.quoteNumber || quote.id.slice(-8)}`;
+        const fromEmail = this.configService.get('SENDGRID_FROM_EMAIL') || 'noreply@gclegacy.com';
+        const fromName = this.configService.get('SENDGRID_FROM_NAME') || 'GC Legacy Construction';
+
+        const template = await this.prisma.emailTemplate.findFirst({
+          where: { type: 'AWARD', active: true },
+          orderBy: { createdAt: 'desc' },
+        });
+
+        const itemTotal = quote.items.reduce((sum, i) => sum + (i.totalPrice || 0), 0);
+        const emailBody = this.generateAwardEmail(quote, orderNumber, itemTotal, template);
+
+        await sgMail.send({
+          to: quote.vendor.email,
+          from: { email: fromEmail, name: fromName },
+          subject: `Purchase Order ${orderNumber} — ${quote.project.name}`,
+          html: emailBody,
+          replyTo: this.configService.get('SENDGRID_REPLY_TO') || 'quotes@mail.gclegacy.com',
+          attachments: [{
+            content: pdfBase64,
+            filename: `${orderNumber}.pdf`,
+            type: 'application/pdf',
+            disposition: 'attachment',
+          }],
+        });
+
+        this.logger.log(`Award email sent to ${quote.vendor.name} (${quote.vendor.email})`);
+        emailSent = true;
+      } catch (error) {
+        this.logger.error(`Award email failed: ${error.message}`);
+        emailError = error.message;
+      }
+    } else if (!this.sendgridConfigured) {
+      emailError = 'Email service not configured';
+    } else if (!quote.vendor.email) {
+      emailError = `Vendor ${quote.vendor.name} has no email address`;
+    }
+
     return {
       success: true,
-      message: 'Quote accepted successfully',
+      message: emailSent
+        ? `Vendor awarded and order sent to ${quote.vendor.email}`
+        : `Vendor awarded${emailError ? ` (email not sent: ${emailError})` : ''}`,
+      emailSent,
+      emailError,
       quote,
     };
+  }
+
+  private generateAwardEmail(quote: any, orderNumber: string, itemTotal: number, template: any): string {
+    if (template?.body) {
+      return template.body
+        .replace(/\{\{VENDOR_NAME\}\}/g, quote.vendor.name)
+        .replace(/\{\{PROJECT_NAME\}\}/g, quote.project.name)
+        .replace(/\{\{ORDER_NUMBER\}\}/g, orderNumber)
+        .replace(/\{\{TOTAL\}\}/g, `$${itemTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+    }
+
+    return `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #1a1a1a;">Purchase Order — ${quote.project.name}</h2>
+        <p>Dear ${quote.vendor.name},</p>
+        <p>We are pleased to inform you that your quote has been accepted for the project <strong>${quote.project.name}</strong>.</p>
+        <p>Please find the attached Purchase Order (<strong>${orderNumber}</strong>) detailing the awarded materials and pricing.</p>
+        <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+          <tr style="background: #f5f5f5;">
+            <td style="padding: 10px; border: 1px solid #ddd;"><strong>Order Number</strong></td>
+            <td style="padding: 10px; border: 1px solid #ddd;">${orderNumber}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px; border: 1px solid #ddd;"><strong>Project</strong></td>
+            <td style="padding: 10px; border: 1px solid #ddd;">${quote.project.name}</td>
+          </tr>
+          <tr style="background: #f5f5f5;">
+            <td style="padding: 10px; border: 1px solid #ddd;"><strong>Items</strong></td>
+            <td style="padding: 10px; border: 1px solid #ddd;">${quote.items.length} line items</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px; border: 1px solid #ddd;"><strong>Total</strong></td>
+            <td style="padding: 10px; border: 1px solid #ddd;"><strong>$${itemTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></td>
+          </tr>
+        </table>
+        <p>Please review the attached PDF and confirm receipt. If you have any questions, reply to this email.</p>
+        <p>Thank you,<br/>GC Legacy Construction</p>
+      </div>
+    `;
   }
 
   async parseQuoteFromEmail(rfqId: string, emailBody: string, attachments?: Buffer[]) {
@@ -347,6 +458,27 @@ export class QuotesService {
     });
 
     return { quoteId, itemsCreated: created };
+  }
+
+  async removeQuoteItem(quoteItemId: string) {
+    const item = await this.prisma.quoteItem.findUnique({
+      where: { id: quoteItemId },
+      select: { quoteId: true },
+    });
+    if (!item) throw new Error('Quote item not found');
+
+    await this.prisma.quoteItem.delete({ where: { id: quoteItemId } });
+
+    const remaining = await this.prisma.quoteItem.findMany({
+      where: { quoteId: item.quoteId },
+    });
+    const newTotal = remaining.reduce((sum, i) => sum + (i.totalPrice || 0), 0);
+    await this.prisma.quote.update({
+      where: { id: item.quoteId },
+      data: { totalAmount: newTotal },
+    });
+
+    return { success: true, newTotal, remainingItems: remaining.length };
   }
 
   async updateQuoteItem(quoteItemId: string, data: { unitPrice: number; totalPrice: number }) {

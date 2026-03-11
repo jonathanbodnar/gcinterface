@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { QuotesService } from './quotes.service';
 import { QuoteAnalysisService } from './quote-analysis.service';
@@ -61,6 +61,12 @@ export class QuotesController {
     @Body() body: { unitPrice: number; totalPrice: number },
   ) {
     return this.quotesService.updateQuoteItem(itemId, body);
+  }
+
+  @Delete('items/:itemId')
+  @ApiOperation({ summary: 'Remove a quote item' })
+  async removeQuoteItem(@Param('itemId') itemId: string) {
+    return this.quotesService.removeQuoteItem(itemId);
   }
 
   @Post(':id/select-winner')
