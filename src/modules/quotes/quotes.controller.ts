@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { QuotesService } from './quotes.service';
 import { QuoteAnalysisService } from './quote-analysis.service';
@@ -46,6 +46,15 @@ export class QuotesController {
   @ApiOperation({ summary: 'Level bids (lowest price per item)' })
   async levelBids(@Param('projectId') projectId: string) {
     return this.quotesService.levelBids(projectId);
+  }
+
+  @Put('items/:itemId')
+  @ApiOperation({ summary: 'Update a quote item price' })
+  async updateQuoteItem(
+    @Param('itemId') itemId: string,
+    @Body() body: { unitPrice: number; totalPrice: number },
+  ) {
+    return this.quotesService.updateQuoteItem(itemId, body);
   }
 
   @Post(':id/select-winner')

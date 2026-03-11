@@ -82,68 +82,11 @@ export class QuotesService {
 
   async parseQuoteFromEmail(rfqId: string, emailBody: string, attachments?: Buffer[]) {
     console.log('🔍 parseQuoteFromEmail called');
+    console.log(`  RFQ Number: ${rfqId}`);
     console.log(`  Attachments: ${attachments?.length || 0}`);
     console.log(`  Email body length: ${emailBody?.length || 0} chars`);
     
-    let quoteData = null;
-
-    // Try to parse from attachments (Excel or PDF)
-    if (attachments && attachments.length > 0) {
-      for (let i = 0; i < attachments.length; i++) {
-        const attachment = attachments[i];
-        console.log(`\n🔍 Trying to parse attachment ${i + 1}/${attachments.length} (${attachment.length} bytes)`);
-        
-        // Try PDF first (since that's what we expect)
-        try {
-          console.log('  📄 Attempting PDF parse...');
-          const pdfData = await pdfParse(attachment);
-          console.log(`  📄 PDF extracted: ${pdfData.text.length} chars of text`);
-          quoteData = this.parsePDFQuote(pdfData.text);
-          if (quoteData) {
-            console.log('  ✅ Successfully parsed quote from PDF!');
-            break;
-          } else {
-            console.log('  ⚠️ PDF parsed but no quote data extracted');
-          }
-        } catch (pdfError) {
-          console.log(`  ❌ PDF parse failed: ${pdfError.message}`);
-          
-          // Try Excel as fallback
-          try {
-            console.log('  📊 Attempting Excel parse...');
-            const workbook = xlsx.read(attachment, { type: 'buffer' });
-            quoteData = this.parseExcelQuote(workbook);
-            if (quoteData) {
-              console.log('  ✅ Successfully parsed quote from Excel!');
-              break;
-            } else {
-              console.log('  ⚠️ Excel parsed but no quote data extracted');
-            }
-          } catch (excelError) {
-            console.log(`  ❌ Excel parse failed: ${excelError.message}`);
-          }
-        }
-      }
-    }
-
-    // Fallback to parsing email body text
-    if (!quoteData) {
-      console.log('⚠️ No quote data from attachments, trying email body...');
-      quoteData = this.parseEmailBodyQuote(emailBody);
-      if (quoteData) {
-        console.log('✅ Parsed quote from email body');
-      }
-    }
-
-    if (!quoteData) {
-      console.log('❌ Could not parse quote from any source');
-      throw new Error('Could not parse quote from email or attachments');
-    }
-
-    console.log(`\n📊 Final quote data: ${quoteData.items.length} items, total: $${quoteData.totalAmount}`);
-
-
-    // Get RFQ to link quote (search by rfqNumber, not id)
+    // Get RFQ first so we can always create items
     const rfq = await this.prisma.rFQ.findUnique({
       where: { rfqNumber: rfqId },
       include: {
@@ -151,9 +94,7 @@ export class QuotesService {
         items: {
           include: {
             bomItem: {
-              include: {
-                material: true,
-              },
+              include: { material: true },
             },
           },
         },
@@ -164,17 +105,62 @@ export class QuotesService {
       throw new Error(`RFQ with number ${rfqId} not found`);
     }
 
-    // Create quote record (use rfq.id, not rfqId which is the rfqNumber)
+    console.log(`✅ RFQ found: ${rfq.rfqNumber} for ${rfq.vendor.name} (${rfq.items.length} items)`);
+
+    // Try parsing from all available sources
+    let quoteData = null;
+    let parseSource = 'none';
+
+    if (attachments && attachments.length > 0) {
+      for (let i = 0; i < attachments.length; i++) {
+        const attachment = attachments[i];
+        console.log(`\n🔍 Trying attachment ${i + 1}/${attachments.length} (${attachment.length} bytes)`);
+        
+        try {
+          const pdfData = await pdfParse(attachment);
+          console.log(`  📄 PDF text extracted: ${pdfData.text.length} chars`);
+          console.log(`  📄 First 300 chars: ${pdfData.text.substring(0, 300)}`);
+          quoteData = this.parsePDFQuote(pdfData.text);
+          if (quoteData) {
+            parseSource = 'pdf';
+            console.log(`  ✅ Parsed ${quoteData.items.length} items from PDF`);
+            break;
+          }
+        } catch (pdfError) {
+          console.log(`  ❌ PDF parse failed: ${pdfError.message}`);
+          try {
+            const workbook = xlsx.read(attachment, { type: 'buffer' });
+            quoteData = this.parseExcelQuote(workbook);
+            if (quoteData) {
+              parseSource = 'excel';
+              break;
+            }
+          } catch (excelError) {
+            console.log(`  ❌ Excel parse failed: ${excelError.message}`);
+          }
+        }
+      }
+    }
+
+    if (!quoteData && emailBody) {
+      console.log('⚠️ No data from attachments, trying email body...');
+      quoteData = this.parseEmailBodyQuote(emailBody);
+      if (quoteData) parseSource = 'email';
+    }
+
+    console.log(`📊 Parse result: source=${parseSource}, items=${quoteData?.items?.length || 0}, total=$${quoteData?.totalAmount || 0}`);
+
+    // Create quote record - ALWAYS, even if parsing extracted nothing
     const quote = await this.prisma.quote.create({
       data: {
         projectId: rfq.projectId,
         vendorId: rfq.vendorId,
         rfqId: rfq.id,
-        quoteNumber: quoteData.quoteNumber || `Q-${Date.now()}`,
-        totalAmount: quoteData.totalAmount,
-        validUntil: quoteData.validUntil,
-        hasVE: quoteData.hasVE || false,
-        veNotes: quoteData.veNotes,
+        quoteNumber: quoteData?.quoteNumber || `Q-${Date.now()}`,
+        totalAmount: quoteData?.totalAmount || 0,
+        validUntil: quoteData?.validUntil,
+        hasVE: quoteData?.hasVE || false,
+        veNotes: quoteData?.veNotes,
         status: 'RECEIVED',
       },
     });
@@ -185,7 +171,7 @@ export class QuotesService {
       data: { status: 'RESPONDED' },
     });
 
-    // Update project status to QUOTE_COMPARISON
+    // Update project status
     try {
       await this.prisma.project.update({
         where: { id: rfq.projectId },
@@ -193,72 +179,153 @@ export class QuotesService {
       });
     } catch { /* non-critical */ }
 
-    // Create quote items AND update vendor pricing
+    // ALWAYS create QuoteItems for every RFQ item (what we asked for).
+    // Then overlay any parsed prices we could match.
+    let matchedCount = 0;
     let pricingUpdates = 0;
-    for (const item of quoteData.items) {
-      // Match item to BOM item by description or SKU
-      const bomItem = this.matchItemToBOM(item, rfq.items.map(ri => ri.bomItem));
+    const parsedItems = quoteData?.items || [];
 
-      if (bomItem) {
-        // Create quote item
-        await this.prisma.quoteItem.create({
-          data: {
-            quoteId: quote.id,
-            bomItemId: bomItem.id,
-            description: item.description,
-            quantity: item.quantity,
-            uom: item.uom,
-            unitPrice: item.unitPrice,
-            totalPrice: item.totalPrice,
-            isAlternate: item.isAlternate || false,
-            alternateFor: item.alternateFor,
-            notes: item.notes,
-          },
-        });
+    for (const rfqItem of rfq.items) {
+      const bomItem = rfqItem.bomItem;
 
-        // ✨ Update vendor pricing from quote
-        if (bomItem.materialId && item.unitPrice > 0) {
-          try {
-            await this.prisma.vendorMaterialPricing.upsert({
-              where: {
-                vendorId_materialId: {
-                  vendorId: rfq.vendorId,
-                  materialId: bomItem.materialId,
-                },
-              },
-              update: {
-                unitCost: item.unitPrice,
-                uom: item.uom,
-                lastQuoteDate: new Date(),
-                sourceQuoteId: quote.id,
-                updatedAt: new Date(),
-              },
-              create: {
+      // Try to find a matching parsed price for this BOM item
+      const matchedParsed = this.matchParsedToRFQItem(rfqItem, parsedItems);
+
+      const unitPrice = matchedParsed?.unitPrice || 0;
+      const totalPrice = matchedParsed?.totalPrice || 0;
+      const matchNotes = matchedParsed
+        ? `Auto-matched from ${parseSource}: "${matchedParsed.description}"`
+        : `Awaiting manual price entry`;
+
+      if (matchedParsed) matchedCount++;
+
+      await this.prisma.quoteItem.create({
+        data: {
+          quoteId: quote.id,
+          bomItemId: bomItem.id,
+          description: bomItem.description,
+          quantity: rfqItem.quantity,
+          uom: rfqItem.uom,
+          unitPrice,
+          totalPrice,
+          isAlternate: false,
+          notes: matchNotes,
+        },
+      });
+
+      // Update vendor pricing if we have a price
+      if (bomItem.materialId && unitPrice > 0) {
+        try {
+          await this.prisma.vendorMaterialPricing.upsert({
+            where: {
+              vendorId_materialId: {
                 vendorId: rfq.vendorId,
                 materialId: bomItem.materialId,
-                unitCost: item.unitPrice,
-                uom: item.uom,
-                lastQuoteDate: new Date(),
-                sourceQuoteId: quote.id,
-                active: true,
               },
-            });
-            pricingUpdates++;
-            console.log(`💰 Updated ${rfq.vendor.name}'s price for ${bomItem.description}: $${item.unitPrice}/${item.uom}`);
-          } catch (error) {
-            console.error(`Failed to update vendor pricing for ${bomItem.description}:`, error.message);
-          }
+            },
+            update: {
+              unitCost: unitPrice,
+              uom: rfqItem.uom,
+              lastQuoteDate: new Date(),
+              sourceQuoteId: quote.id,
+              updatedAt: new Date(),
+            },
+            create: {
+              vendorId: rfq.vendorId,
+              materialId: bomItem.materialId,
+              unitCost: unitPrice,
+              uom: rfqItem.uom,
+              lastQuoteDate: new Date(),
+              sourceQuoteId: quote.id,
+              active: true,
+            },
+          });
+          pricingUpdates++;
+        } catch (error) {
+          console.error(`Failed to update pricing for ${bomItem.description}:`, error.message);
         }
       }
     }
 
-    console.log(`✅ Quote parsed: ${quote.quoteNumber} | ${quoteData.items.length} items | ${pricingUpdates} prices updated`);
+    // Update quote total from matched items if we have better data
+    if (matchedCount > 0) {
+      const computedTotal = rfq.items.reduce((sum, rfqItem) => {
+        const matched = this.matchParsedToRFQItem(rfqItem, parsedItems);
+        return sum + (matched?.totalPrice || 0);
+      }, 0);
+      if (computedTotal > 0) {
+        await this.prisma.quote.update({
+          where: { id: quote.id },
+          data: { totalAmount: computedTotal },
+        });
+      }
+    }
+
+    console.log(`✅ Quote created: ${quote.quoteNumber}`);
+    console.log(`   ${rfq.items.length} line items created (${matchedCount} with prices from ${parseSource})`);
+    console.log(`   ${pricingUpdates} vendor prices updated`);
 
     return {
       quote,
-      itemsCreated: quoteData.items.length,
+      itemsCreated: rfq.items.length,
+      matchedItems: matchedCount,
+      parseSource,
       pricingUpdates,
     };
+  }
+
+  private matchParsedToRFQItem(rfqItem: any, parsedItems: any[]): any {
+    if (parsedItems.length === 0) return null;
+    const bomDesc = rfqItem.bomItem?.description?.toLowerCase() || rfqItem.description?.toLowerCase() || '';
+    const bomWords = bomDesc.split(/\s+/).filter(w => w.length > 2);
+
+    let bestMatch: any = null;
+    let bestScore = 0;
+
+    for (const parsed of parsedItems) {
+      const parsedDesc = (parsed.description || '').toLowerCase();
+
+      // Exact substring match
+      if (bomDesc.includes(parsedDesc) || parsedDesc.includes(bomDesc)) {
+        return parsed;
+      }
+
+      // Word overlap scoring
+      const parsedWords = parsedDesc.split(/\s+/).filter(w => w.length > 2);
+      const overlap = bomWords.filter(w => parsedWords.some(pw => pw.includes(w) || w.includes(pw)));
+      const score = overlap.length / Math.max(bomWords.length, 1);
+
+      if (score > bestScore && score >= 0.4) {
+        bestScore = score;
+        bestMatch = parsed;
+      }
+    }
+
+    return bestMatch;
+  }
+
+  async updateQuoteItem(quoteItemId: string, data: { unitPrice: number; totalPrice: number }) {
+    const item = await this.prisma.quoteItem.update({
+      where: { id: quoteItemId },
+      data: {
+        unitPrice: data.unitPrice,
+        totalPrice: data.totalPrice,
+        notes: 'Manually entered',
+      },
+      include: { quote: true },
+    });
+
+    // Recalculate quote total
+    const allItems = await this.prisma.quoteItem.findMany({
+      where: { quoteId: item.quoteId },
+    });
+    const newTotal = allItems.reduce((sum, i) => sum + (i.totalPrice || 0), 0);
+    await this.prisma.quote.update({
+      where: { id: item.quoteId },
+      data: { totalAmount: newTotal },
+    });
+
+    return { item, newTotal };
   }
 
   async compareQuotes(projectId: string) {

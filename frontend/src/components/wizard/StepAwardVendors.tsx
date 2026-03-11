@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWizard } from '../../contexts/ProjectWizardContext';
 import axios from 'axios';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
   Loader2,
@@ -19,6 +20,8 @@ import {
   ArrowLeft,
   Clock,
   Eye,
+  Pencil,
+  Save,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -36,6 +39,9 @@ export default function StepAwardVendors() {
   const [awarding, setAwarding] = useState<string | null>(null);
   const [expandedQuote, setExpandedQuote] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'compare' | 'unquoted'>('overview');
+  const [editingItem, setEditingItem] = useState<string | null>(null);
+  const [editPrice, setEditPrice] = useState('');
+  const [savingItem, setSavingItem] = useState<string | null>(null);
 
   useEffect(() => {
     if (projectId) loadData();
@@ -54,7 +60,6 @@ export default function StepAwardVendors() {
 
       const quoteList = quoteRes.data || [];
 
-      // Auto-load details for all quotes so we have line items
       const detailPromises = quoteList.map((q: any) =>
         axios.get(`${API_URL}/quotes/${q.id}`).catch(() => ({ data: null }))
       );
@@ -65,21 +70,19 @@ export default function StepAwardVendors() {
       });
       setQuoteDetails(details);
 
-      // Compute correct totals from line items
-      const quotesWithCorrectTotals = quoteList.map((q: any) => {
+      const quotesWithTotals = quoteList.map((q: any) => {
         const detail = details[q.id];
         if (detail?.items?.length > 0) {
           const lineItemTotal = detail.items.reduce(
-            (sum: number, item: any) => sum + (item.totalPrice || 0),
-            0
+            (sum: number, item: any) => sum + (item.totalPrice || 0), 0
           );
-          return { ...q, computedTotal: lineItemTotal };
+          const pricedItems = detail.items.filter((i: any) => i.unitPrice > 0).length;
+          return { ...q, computedTotal: lineItemTotal, pricedItems, totalItems: detail.items.length };
         }
-        return { ...q, computedTotal: q.totalAmount || 0 };
+        return { ...q, computedTotal: q.totalAmount || 0, pricedItems: 0, totalItems: 0 };
       });
-      setQuotes(quotesWithCorrectTotals);
+      setQuotes(quotesWithTotals);
 
-      // Load comparison if quotes exist
       if (quoteList.length > 0) {
         try {
           const compRes = await axios.get(`${API_URL}/quotes/compare/${projectId}`);
@@ -106,6 +109,27 @@ export default function StepAwardVendors() {
       setExpandedQuote(expandedQuote === quoteId ? null : quoteId);
     }
   };
+
+  const saveItemPrice = useCallback(async (itemId: string, qty: number) => {
+    const price = parseFloat(editPrice);
+    if (isNaN(price) || price < 0) return;
+
+    setSavingItem(itemId);
+    try {
+      await axios.put(`${API_URL}/quotes/items/${itemId}`, {
+        unitPrice: price,
+        totalPrice: price * qty,
+      });
+      // Refresh data to get updated totals
+      await loadData();
+      setEditingItem(null);
+      setEditPrice('');
+    } catch (err) {
+      console.error('Failed to save price:', err);
+    } finally {
+      setSavingItem(null);
+    }
+  }, [editPrice, projectId]);
 
   const awardVendor = async (quoteId: string) => {
     setAwarding(quoteId);
@@ -148,12 +172,10 @@ export default function StepAwardVendors() {
   const sentRfqs = rfqs.filter((r: any) => r.status === 'SENT' || r.status === 'RESPONDED');
   const awardedQuotes = quotes.filter((q: any) => q.status === 'AWARDED');
 
-  // Use BOM status endpoint for unquoted items
   const unquotedItems = bomStatuses.filter((item: any) => item.overallStatus === 'AVAILABLE');
   const rfqSentItems = bomStatuses.filter((item: any) => item.overallStatus === 'RFQ_SENT');
   const awardedItems = bomStatuses.filter((item: any) => item.overallStatus === 'AWARDED');
 
-  // Use computed totals for averages
   const totalQuoted = quotes.reduce((sum: number, q: any) => sum + (q.computedTotal || 0), 0);
   const avgQuote = quotes.length > 0 ? totalQuoted / quotes.length : 0;
 
@@ -164,7 +186,7 @@ export default function StepAwardVendors() {
           <h2 className="text-2xl font-bold tracking-tight">Review Quotes & Award</h2>
           <p className="text-muted-foreground">
             {quotes.length > 0
-              ? `${quotes.length} quote${quotes.length > 1 ? 's' : ''} received — compare and award vendors`
+              ? `${quotes.length} quote${quotes.length > 1 ? 's' : ''} received — review prices and award vendors`
               : 'Waiting for vendor quotes to come in'}
           </p>
         </div>
@@ -263,8 +285,10 @@ export default function StepAwardVendors() {
             const detail = quoteDetails[quote.id];
             const isExpanded = expandedQuote === quote.id;
             const isAwarded = quote.status === 'AWARDED';
-            const displayTotal = quote.computedTotal || quote.totalAmount || 0;
-            const itemCount = detail?.items?.length || quote._count?.items || 0;
+            const displayTotal = quote.computedTotal || 0;
+            const pricedCount = quote.pricedItems || 0;
+            const totalItemCount = quote.totalItems || 0;
+            const needsPricing = totalItemCount > 0 && pricedCount < totalItemCount;
 
             return (
               <Card key={quote.id} className={cn(isAwarded && 'ring-2 ring-green-500')}>
@@ -278,32 +302,28 @@ export default function StepAwardVendors() {
                             <Trophy className="w-3 h-3 mr-1" /> Awarded
                           </Badge>
                         )}
-                        <Badge variant="secondary">{itemCount} items quoted</Badge>
+                        <Badge variant="secondary">
+                          {pricedCount}/{totalItemCount} items priced
+                        </Badge>
                       </div>
                       <div className="flex items-center gap-4 text-sm text-muted-foreground">
                         <span>RFQ: {rfq?.rfqNumber || '-'}</span>
                         <span>Received: {new Date(quote.receivedAt || quote.createdAt).toLocaleDateString()}</span>
-                        {quote.quoteNumber && <span>Quote #: {quote.quoteNumber}</span>}
                       </div>
-                      {itemCount === 0 && (
+                      {needsPricing && (
                         <div className="mt-2 flex items-center gap-2 text-xs text-yellow-600">
-                          <AlertTriangle className="w-3 h-3" />
-                          No line items parsed from this quote — PDF may not have been processed
+                          <Pencil className="w-3 h-3" />
+                          {totalItemCount - pricedCount} item{totalItemCount - pricedCount !== 1 ? 's' : ''} need manual pricing — expand to enter prices
                         </div>
                       )}
                     </div>
                     <div className="text-right">
                       <div className="text-2xl font-bold">
-                        {itemCount > 0
+                        {displayTotal > 0
                           ? `$${displayTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
-                          : <span className="text-muted-foreground text-lg">No data</span>
+                          : <span className="text-muted-foreground text-lg">Enter prices below</span>
                         }
                       </div>
-                      {itemCount > 0 && displayTotal !== quote.totalAmount && quote.totalAmount > 0 && (
-                        <div className="text-xs text-muted-foreground line-through">
-                          Parsed: ${quote.totalAmount?.toLocaleString()}
-                        </div>
-                      )}
                       <div className="flex gap-2 mt-2">
                         <Button
                           size="sm"
@@ -314,7 +334,7 @@ export default function StepAwardVendors() {
                           {isExpanded ? 'Hide' : 'View'} Details
                           {isExpanded ? <ChevronDown className="w-4 h-4 ml-1" /> : <ChevronRight className="w-4 h-4 ml-1" />}
                         </Button>
-                        {!isAwarded && quote.status !== 'REJECTED' && itemCount > 0 && (
+                        {!isAwarded && quote.status !== 'REJECTED' && pricedCount > 0 && (
                           <Button
                             size="sm"
                             onClick={() => awardVendor(quote.id)}
@@ -332,7 +352,7 @@ export default function StepAwardVendors() {
                     </div>
                   </div>
 
-                  {/* Expanded quote line items */}
+                  {/* Expanded quote line items with inline editing */}
                   {isExpanded && (
                     <div className="mt-4 border-t pt-4">
                       {!detail ? (
@@ -348,25 +368,88 @@ export default function StepAwardVendors() {
                               <TableHead>UOM</TableHead>
                               <TableHead className="text-right">Unit Price</TableHead>
                               <TableHead className="text-right">Total</TableHead>
-                              <TableHead>Notes</TableHead>
+                              <TableHead className="w-[80px]"></TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {detail.items.map((item: any) => (
-                              <TableRow key={item.id}>
-                                <TableCell className="font-medium">
-                                  {item.description}
-                                  {item.isAlternate && (
-                                    <Badge variant="outline" className="ml-2 text-xs">Alt</Badge>
-                                  )}
-                                </TableCell>
-                                <TableCell className="text-right">{item.quantity?.toFixed(2)}</TableCell>
-                                <TableCell>{item.uom}</TableCell>
-                                <TableCell className="text-right">${item.unitPrice?.toFixed(2)}</TableCell>
-                                <TableCell className="text-right font-semibold">${item.totalPrice?.toLocaleString()}</TableCell>
-                                <TableCell className="text-sm text-muted-foreground">{item.notes || '-'}</TableCell>
-                              </TableRow>
-                            ))}
+                            {detail.items.map((item: any) => {
+                              const isEditing = editingItem === item.id;
+                              const hasPriceData = item.unitPrice > 0;
+
+                              return (
+                                <TableRow key={item.id} className={cn(!hasPriceData && 'bg-yellow-50/50 dark:bg-yellow-950/20')}>
+                                  <TableCell className="font-medium">
+                                    {item.description}
+                                    {item.isAlternate && (
+                                      <Badge variant="outline" className="ml-2 text-xs">Alt</Badge>
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="text-right">{item.quantity?.toFixed(2)}</TableCell>
+                                  <TableCell>{item.uom}</TableCell>
+                                  <TableCell className="text-right">
+                                    {isEditing ? (
+                                      <div className="flex items-center justify-end gap-1">
+                                        <span className="text-muted-foreground">$</span>
+                                        <Input
+                                          type="number"
+                                          step="0.01"
+                                          className="w-24 h-7 text-right text-sm"
+                                          value={editPrice}
+                                          onChange={e => setEditPrice(e.target.value)}
+                                          onKeyDown={e => {
+                                            if (e.key === 'Enter') saveItemPrice(item.id, item.quantity);
+                                            if (e.key === 'Escape') { setEditingItem(null); setEditPrice(''); }
+                                          }}
+                                          autoFocus
+                                        />
+                                      </div>
+                                    ) : hasPriceData ? (
+                                      `$${item.unitPrice?.toFixed(2)}`
+                                    ) : (
+                                      <span className="text-yellow-600 text-xs">needs price</span>
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="text-right font-semibold">
+                                    {isEditing && editPrice
+                                      ? `$${(parseFloat(editPrice) * item.quantity).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+                                      : hasPriceData
+                                        ? `$${item.totalPrice?.toLocaleString()}`
+                                        : '-'
+                                    }
+                                  </TableCell>
+                                  <TableCell>
+                                    {isEditing ? (
+                                      <div className="flex gap-1">
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          className="h-7 w-7 p-0"
+                                          onClick={() => saveItemPrice(item.id, item.quantity)}
+                                          disabled={savingItem === item.id}
+                                        >
+                                          {savingItem === item.id
+                                            ? <Loader2 className="w-3 h-3 animate-spin" />
+                                            : <Save className="w-3 h-3" />
+                                          }
+                                        </Button>
+                                      </div>
+                                    ) : (
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-7 w-7 p-0"
+                                        onClick={() => {
+                                          setEditingItem(item.id);
+                                          setEditPrice(item.unitPrice > 0 ? item.unitPrice.toString() : '');
+                                        }}
+                                      >
+                                        <Pencil className="w-3 h-3" />
+                                      </Button>
+                                    )}
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
                             <TableRow className="font-bold border-t-2">
                               <TableCell colSpan={4}>TOTAL</TableCell>
                               <TableCell className="text-right">
@@ -379,17 +462,8 @@ export default function StepAwardVendors() {
                       ) : (
                         <div className="text-center py-6 text-muted-foreground">
                           <AlertTriangle className="w-8 h-8 mx-auto mb-2 text-yellow-500" />
-                          <p className="font-medium">No line items were parsed from this quote</p>
-                          <p className="text-sm mt-1">
-                            The vendor's PDF attachment may not have been received or couldn't be read.
-                            Check that SendGrid Inbound Parse is configured to forward attachments.
-                          </p>
-                        </div>
-                      )}
-                      {detail?.hasVE && detail.veNotes && (
-                        <div className="mt-3 bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded p-3 text-sm">
-                          <span className="font-medium text-yellow-800 dark:text-yellow-200">Value Engineering Notes:</span>
-                          <span className="text-yellow-700 dark:text-yellow-300 ml-2">{detail.veNotes}</span>
+                          <p className="font-medium">No line items found</p>
+                          <p className="text-sm mt-1">This quote may need to be re-processed.</p>
                         </div>
                       )}
                     </div>
@@ -439,7 +513,6 @@ export default function StepAwardVendors() {
               <div className="text-center py-12 text-muted-foreground">
                 <DollarSign className="w-16 h-16 mx-auto mb-4 opacity-50" />
                 <p>No quotes to compare yet.</p>
-                <p className="text-sm mt-1">Quotes will be compared automatically as vendors respond.</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -465,7 +538,6 @@ export default function StepAwardVendors() {
                         ))}
                       </TableRow>
                     ))}
-                    {/* Totals row - computed from line items */}
                     <TableRow className="font-bold border-t-2">
                       <TableCell>TOTAL</TableCell>
                       {comparison.vendors?.map((vendor: string) => {
@@ -554,7 +626,6 @@ export default function StepAwardVendors() {
                             {item.overallStatus === 'RFQ_SENT' && (
                               <Badge className="text-xs bg-blue-600 text-white">
                                 RFQ Sent
-                                {item.rfqs?.length > 0 && ` (${item.rfqs.map((r: any) => r.vendorName).join(', ')})`}
                               </Badge>
                             )}
                           </TableCell>
@@ -567,7 +638,6 @@ export default function StepAwardVendors() {
             </>
           )}
 
-          {/* Show awarded items for reference */}
           {awardedItems.length > 0 && (
             <Card>
               <CardHeader>
