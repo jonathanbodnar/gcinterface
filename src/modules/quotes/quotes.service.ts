@@ -27,7 +27,7 @@ export class QuotesService {
         },
         _count: {
           select: {
-            items: true,
+            items: { where: { unitPrice: { gt: 0 } } },
           },
         },
       },
@@ -44,6 +44,7 @@ export class QuotesService {
         vendor: true,
         rfq: true,
         items: {
+          where: { unitPrice: { gt: 0 } },
           include: {
             bomItem: {
               include: {
@@ -378,6 +379,7 @@ export class QuotesService {
       include: {
         vendor: true,
         items: {
+          where: { unitPrice: { gt: 0 } },
           include: {
             bomItem: true,
           },
