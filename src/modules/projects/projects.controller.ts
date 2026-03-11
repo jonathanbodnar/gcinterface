@@ -165,6 +165,48 @@ export class ProjectsController {
     }
   }
 
+  @Post(':id/reset-to-step')
+  @ApiOperation({ summary: 'Reset project to a specific wizard step, clearing downstream data' })
+  async resetToStep(
+    @Param('id') id: string,
+    @Body() body: { step: string },
+  ) {
+    const project = await this.prisma.project.findUnique({ where: { id } });
+    if (!project) throw new HttpException('Project not found', HttpStatus.NOT_FOUND);
+
+    const step = body.step || 'bom';
+
+    await this.prisma.$transaction(async (tx) => {
+      // Clear quotes and their items
+      const rfqs = await tx.rFQ.findMany({ where: { projectId: id }, select: { id: true } });
+      const rfqIds = rfqs.map(r => r.id);
+      if (rfqIds.length > 0) {
+        await tx.quoteItem.deleteMany({ where: { quote: { rfqId: { in: rfqIds } } } });
+        await tx.quote.deleteMany({ where: { rfqId: { in: rfqIds } } });
+        await tx.rFQItem.deleteMany({ where: { rfqId: { in: rfqIds } } });
+      }
+      await tx.rFQ.deleteMany({ where: { projectId: id } });
+
+      // Clear vendor selections
+      await tx.project.update({
+        where: { id },
+        data: {
+          selectedVendorIds: [],
+          wizardStep: step,
+          status: 'BOM_GENERATION',
+          rfqsSent: 0,
+          quotesReceived: 0,
+          responseRate: null,
+        },
+      });
+    });
+
+    return {
+      success: true,
+      message: `Project reset to step "${step}" — all vendor matches, RFQs, and quotes cleared`,
+    };
+  }
+
   @Post(':id/recalculate-status')
   @ApiOperation({ summary: 'Recalculate project status from actual data' })
   async recalculateStatus(@Param('id') id: string) {
