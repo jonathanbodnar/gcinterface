@@ -650,103 +650,118 @@ export class QuotesService {
   private parsePDFQuote(pdfText: string): any {
     console.log('📄 Parsing PDF quote...');
     console.log('📄 PDF Text length:', pdfText.length, 'chars');
-    console.log('📄 First 500 chars of PDF text:');
-    console.log(pdfText.substring(0, 500));
+    console.log('📄 First 1000 chars:');
+    console.log(pdfText.substring(0, 1000));
     console.log('📄 ---END SAMPLE---');
     
     const lines = pdfText.split('\n').map(l => l.trim()).filter(Boolean);
     console.log(`📄 PDF has ${lines.length} non-empty lines`);
-    console.log('📄 First 10 lines:');
-    lines.slice(0, 10).forEach((line, i) => console.log(`  ${i + 1}: "${line}"`));
+    console.log('📄 All lines (first 50):');
+    lines.slice(0, 50).forEach((line, i) => console.log(`  ${i + 1}: "${line}"`));
     console.log('📄 ---END LINES---');
     
     const items = [];
     let totalAmount = 0;
+    let quoteNumber: string | null = null;
+
+    // Try to find a quote number
+    for (const line of lines) {
+      const qnMatch = line.match(/(?:quote|proposal|estimate)\s*#?\s*:?\s*(\S+)/i);
+      if (qnMatch) { quoteNumber = qnMatch[1]; break; }
+    }
+
+    // Find all dollar amounts in the text to understand the data
+    const allPrices: { line: string; amounts: number[] }[] = [];
+    for (const line of lines) {
+      const amounts = [...line.matchAll(/\$\s*([\d,]+\.?\d*)/g)].map(m => parseFloat(m[1].replace(/,/g, '')));
+      if (amounts.length > 0 && amounts.some(a => a > 0)) {
+        allPrices.push({ line, amounts });
+      }
+    }
+    console.log(`📄 Found ${allPrices.length} lines with dollar amounts`);
+    allPrices.forEach(p => console.log(`  💲 "${p.line.substring(0, 100)}" => [${p.amounts.join(', ')}]`));
 
     for (const line of lines) {
-      // Pattern 1: Concatenated format from your PDF
-      // Example: "14-inch Rubber Base Molding1.05 LF$2.25 / LF~$2.36"
-      // Format: ItemNum + Description + Qty + UOM + $Price / UOM + ~$Total
-      const pattern1 = line.match(/^(\d+)(.+?)([\d.]+)\s+([A-Z]+)\s*\$?([\d,]+\.?\d*)\s*\/\s*[A-Za-z]+\s*[~]?\$?([\d,]+\.?\d*)/);
-      
-      if (pattern1) {
-        const [, itemNum, description, qty, uom, unitPrice, total] = pattern1;
-        console.log(`  ✅ Matched pattern 1: ${description.trim()} | ${qty} ${uom} @ $${unitPrice} = $${total}`);
-        items.push({
-          description: description.trim(),
-          quantity: parseFloat(qty),
-          uom: uom.trim(),
-          unitPrice: parseFloat(unitPrice.replace(/,/g, '')),
-          totalPrice: parseFloat(total.replace(/,/g, '')),
-        });
+      // Skip header/label lines
+      if (/^(item|#|no\.|description|material|qty|quantity|uom|unit|price|total|amount|subtotal)\s*$/i.test(line)) continue;
+      if (/^(date|from|to|phone|fax|email|address|page|quote|proposal|estimate|terms)/i.test(line)) continue;
+
+      let matched = false;
+
+      // Pattern: "ItemNum  Description  Qty UOM  $Price/UOM  ~$Total"
+      const p1 = line.match(/^(\d+)\s+(.+?)\s+([\d,.]+)\s+(SF|LF|EA|SY|CY|CF|GAL|LB|TON|HR|LS|SET|PC|BOX|BAG|ROLL|SHT|BDL)\s+\$?([\d,]+\.?\d*)\s*(?:\/\s*\w+\s*)?[~≈]?\$?([\d,]+\.?\d*)/i);
+      if (p1) {
+        const [, , desc, qty, uom, unitP, total] = p1;
+        items.push({ description: desc.trim(), quantity: parseFloat(qty.replace(/,/g, '')), uom: uom.toUpperCase(), unitPrice: parseFloat(unitP.replace(/,/g, '')), totalPrice: parseFloat(total.replace(/,/g, '')) });
         totalAmount += parseFloat(total.replace(/,/g, ''));
-        continue;
-      }
-      
-      // Pattern 2: Whitespace-separated format "Item#  Description  Qty UOM  $Price / UOM  ~$Total"
-      // Example: "1  4-inch Rubber Base Molding  1.05 LF  $2.25 / LF  ~$2.36"
-      const pattern2 = line.match(/^\d+\s+(.+?)\s+([\d.]+)\s+(\w+)\s+\$?([\d,]+\.?\d*)\s*\/\s*\w+\s+[~]?\$?([\d,]+\.?\d*)/);
-      
-      if (pattern2) {
-        const [, description, qty, uom, unitPrice, total] = pattern2;
-        console.log(`  ✅ Matched pattern 2: ${description} | ${qty} ${uom} @ $${unitPrice} = $${total}`);
-        items.push({
-          description: description.trim(),
-          quantity: parseFloat(qty),
-          uom: uom.trim(),
-          unitPrice: parseFloat(unitPrice.replace(/,/g, '')),
-          totalPrice: parseFloat(total.replace(/,/g, '')),
-        });
-        totalAmount += parseFloat(total.replace(/,/g, ''));
-        continue;
+        matched = true;
       }
 
-      // Pattern 3: Standard table format "Description  Qty  UOM  Price  Total"
-      const pattern3 = line.match(/(.+?)\s+(\d+\.?\d*)\s+(\w+)\s+\$?([\d,]+\.?\d*)\s+\$?([\d,]+\.?\d*)/);
-      
-      if (pattern3) {
-        const [, description, qty, uom, unitPrice, total] = pattern3;
-        console.log(`  ✅ Matched pattern 3: ${description} | ${qty} ${uom} @ $${unitPrice} = $${total}`);
-        items.push({
-          description: description.trim(),
-          quantity: parseFloat(qty),
-          uom: uom,
-          unitPrice: parseFloat(unitPrice.replace(/,/g, '')),
-          totalPrice: parseFloat(total.replace(/,/g, '')),
-        });
-        totalAmount += parseFloat(total.replace(/,/g, ''));
-        continue;
-      }
-
-      // Pattern 4: Simple "Description: $price"
-      const pattern4 = line.match(/(.+?):\s*\$?([\d,]+\.?\d*)/);
-      if (pattern4) {
-        const price = parseFloat(pattern4[2].replace(/,/g, ''));
-        if (price > 10) {
-          console.log(`  ✅ Matched pattern 4: ${pattern4[1]} @ $${price}`);
-          items.push({
-            description: pattern4[1].trim(),
-            quantity: 1,
-            uom: 'EA',
-            unitPrice: price,
-            totalPrice: price,
-          });
-          totalAmount += price;
+      // Pattern: "Description  Qty  UOM  $UnitPrice  $TotalPrice" (no item number)
+      if (!matched) {
+        const p2 = line.match(/^(.{4,}?)\s{2,}([\d,.]+)\s+(SF|LF|EA|SY|CY|CF|GAL|LB|TON|HR|LS|SET|PC|BOX|BAG|ROLL|SHT|BDL)\s+\$?([\d,]+\.?\d*)\s+\$?([\d,]+\.?\d*)\s*$/i);
+        if (p2) {
+          const [, desc, qty, uom, unitP, total] = p2;
+          items.push({ description: desc.trim(), quantity: parseFloat(qty.replace(/,/g, '')), uom: uom.toUpperCase(), unitPrice: parseFloat(unitP.replace(/,/g, '')), totalPrice: parseFloat(total.replace(/,/g, '')) });
+          totalAmount += parseFloat(total.replace(/,/g, ''));
+          matched = true;
         }
+      }
+
+      // Pattern: line with description + two dollar amounts (unit price and total)
+      if (!matched) {
+        const p3 = line.match(/^(.{4,}?)\s+\$?([\d,]+\.?\d{2})\s+\$?([\d,]+\.?\d{2})\s*$/);
+        if (p3) {
+          const [, desc, price1, price2] = p3;
+          const p1v = parseFloat(price1.replace(/,/g, ''));
+          const p2v = parseFloat(price2.replace(/,/g, ''));
+          if (p1v > 0 && p2v > 0 && !/(total|subtotal|tax|shipping|grand)/i.test(desc)) {
+            items.push({ description: desc.trim(), quantity: p2v / p1v || 1, uom: 'EA', unitPrice: p1v, totalPrice: p2v });
+            totalAmount += p2v;
+            matched = true;
+          }
+        }
+      }
+
+      // Pattern: line with description + one dollar amount (lump sum)
+      if (!matched) {
+        const p4 = line.match(/^(.{6,}?)\s+\$\s*([\d,]+\.?\d{2})\s*$/);
+        if (p4) {
+          const price = parseFloat(p4[2].replace(/,/g, ''));
+          if (price > 1 && !/(total|subtotal|tax|shipping|grand|balance|deposit|due)/i.test(p4[1])) {
+            items.push({ description: p4[1].trim(), quantity: 1, uom: 'LS', unitPrice: price, totalPrice: price });
+            totalAmount += price;
+            matched = true;
+          }
+        }
+      }
+
+      if (matched) {
+        console.log(`  ✅ Parsed: "${items[items.length - 1].description}" $${items[items.length - 1].unitPrice} x ${items[items.length - 1].quantity} = $${items[items.length - 1].totalPrice}`);
       }
     }
 
-    console.log(`📄 PDF parsing complete: ${items.length} items found, total: $${totalAmount}`);
+    // Look for an explicit total
+    let explicitTotal = 0;
+    for (const line of lines) {
+      const totalMatch = line.match(/(?:grand\s*)?total\s*[:=]?\s*\$?\s*([\d,]+\.?\d*)/i);
+      if (totalMatch) {
+        const t = parseFloat(totalMatch[1].replace(/,/g, ''));
+        if (t > explicitTotal) explicitTotal = t;
+      }
+    }
+
+    console.log(`📄 PDF parsing: ${items.length} items, computed=$${totalAmount}, explicit total=$${explicitTotal}`);
 
     if (items.length === 0) {
-      console.log('⚠️ No items found in PDF, returning null');
+      console.log('⚠️ No structured items found in PDF');
       return null;
     }
 
     return {
-      quoteNumber: null,
+      quoteNumber,
       items,
-      totalAmount,
+      totalAmount: explicitTotal > 0 ? explicitTotal : totalAmount,
       hasVE: pdfText.toLowerCase().includes('alternative') || pdfText.toLowerCase().includes('substitute'),
     };
   }

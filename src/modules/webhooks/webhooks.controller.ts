@@ -1,7 +1,8 @@
 import { Controller, Post, Get, Headers, Req } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiExcludeEndpoint } from '@nestjs/swagger';
+import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { QuotesService } from '../quotes/quotes.service';
 import { Request } from 'express';
+import { simpleParser } from 'mailparser';
 
 @ApiTags('Webhooks')
 @Controller('webhooks')
@@ -26,127 +27,188 @@ export class WebhooksController {
     @Headers() headers: any,
   ) {
     const payload = req.body || {};
+    const multerFiles = (req as any).files || [];
     
     console.log('📧 ==========================================');
     console.log('📧 INBOUND EMAIL RECEIVED FROM SENDGRID');
     console.log('📧 ==========================================');
-    console.log('  Raw req.body type:', typeof req.body);
-    console.log('  Raw req.body keys:', req.body ? Object.keys(req.body) : 'NULL');
     console.log('  Content-Type:', headers['content-type']);
-    console.log(`  From: ${payload?.from}`);
-    console.log(`  To: ${payload?.to}`);
-    console.log(`  Subject: ${payload?.subject}`);
-    console.log(`  Attachments count: ${payload?.attachments || '0'}`);
-    console.log(`  Files from multer: ${(req as any).files?.length || 0}`);
-
-    // Optional: Verify SendGrid signature for security
-    if (process.env.SENDGRID_WEBHOOK_SECRET) {
-      const signature = headers['x-twilio-email-event-webhook-signature'];
-      // TODO: Implement signature verification
-    }
-
-    // Check spam score
-    const spamScore = parseFloat(payload.spam_score || '0');
-    if (spamScore > 5.0) {
-      console.log('⚠️ Email marked as spam, skipping');
-      return { ignored: true, reason: 'spam_score_too_high' };
-    }
+    console.log('  Body keys:', Object.keys(payload).join(', '));
+    console.log('  Multer files:', multerFiles.length);
+    console.log('  Has raw email field:', !!payload.email);
+    console.log(`  From: ${payload.from || '(not in body)'}`);
+    console.log(`  To: ${payload.to || '(not in body)'}`);
+    console.log(`  Subject: ${payload.subject || '(not in body)'}`);
+    console.log(`  Attachments field: ${payload.attachments || '0'}`);
 
     try {
-      const subject = payload?.subject || '';
-      const to = payload?.to || '';
-      const from = payload?.from || '';
+      // Extract email data from either parsed or raw mode
+      const emailData = await this.extractEmailData(payload, multerFiles);
       
+      console.log('📧 Extracted email data:');
+      console.log(`  From: ${emailData.from}`);
+      console.log(`  Subject: ${emailData.subject}`);
+      console.log(`  Body length: ${emailData.body?.length || 0} chars`);
+      console.log(`  Attachments: ${emailData.attachments.length}`);
+      emailData.attachments.forEach((att, i) => {
+        console.log(`    ${i + 1}: ${att.filename} (${att.contentType}, ${att.content.length} bytes)`);
+      });
+
+      // Check spam
+      const spamScore = parseFloat(payload.spam_score || '0');
+      if (spamScore > 5.0) {
+        console.log('⚠️ Spam score too high, skipping');
+        return { ignored: true, reason: 'spam_score_too_high' };
+      }
+
+      // Find RFQ ID
       let rfqId: string | null = null;
       
-      const subjectMatch = subject.match(/(RFQ-[0-9]+)/i);
+      const subjectMatch = (emailData.subject || '').match(/(RFQ-[0-9]+)/i);
       if (subjectMatch) {
         rfqId = subjectMatch[1];
         console.log(`📋 RFQ ID from subject: ${rfqId}`);
       }
       
       if (!rfqId) {
-        const rfqMatch = to.match(/rfq-(.+?)@/);
-        if (rfqMatch) {
-          rfqId = rfqMatch[1];
+        const toMatch = (emailData.to || '').match(/rfq-(.+?)@/);
+        if (toMatch) {
+          rfqId = toMatch[1];
           console.log(`📋 RFQ ID from recipient: ${rfqId}`);
         }
       }
       
       if (!rfqId) {
-        console.log('⚠️ Could not identify RFQ from subject or recipient');
-        console.log(`  Subject: ${subject}`);
-        console.log(`  To: ${to}`);
-        return { error: 'Could not identify RFQ. Please include RFQ number in subject.' };
+        // Also search the email body for RFQ reference
+        const bodyMatch = (emailData.body || '').match(/(RFQ-[0-9]+)/i);
+        if (bodyMatch) {
+          rfqId = bodyMatch[1];
+          console.log(`📋 RFQ ID from email body: ${rfqId}`);
+        }
       }
 
-      return await this.processQuote(rfqId, payload, req);
-    } catch (error) {
-      console.error('❌ Error processing inbound email:', error);
-      console.error('  Stack:', error.stack);
+      if (!rfqId) {
+        console.log('⚠️ Could not identify RFQ');
+        return { error: 'Could not identify RFQ number in subject, recipient, or body.' };
+      }
+
+      // Check if quote already exists for this RFQ
+      const existingQuote = await this.quotesService['prisma'].rFQ.findUnique({
+        where: { rfqNumber: rfqId },
+        include: { quote: true },
+      });
+
+      if (existingQuote?.quote) {
+        console.log(`⚠️ Quote already exists for ${rfqId}, re-processing with new data`);
+        // Delete old quote items and update
+        await this.quotesService['prisma'].quoteItem.deleteMany({
+          where: { quoteId: existingQuote.quote.id },
+        });
+        await this.quotesService['prisma'].quote.delete({
+          where: { id: existingQuote.quote.id },
+        });
+        console.log('🗑️ Deleted old quote, will create fresh one');
+      }
+
+      // Extract PDF/Excel buffers from attachments
+      const pdfBuffers: Buffer[] = [];
+      for (const att of emailData.attachments) {
+        if (att.contentType?.includes('pdf') || att.filename?.toLowerCase().endsWith('.pdf')) {
+          pdfBuffers.push(att.content);
+          console.log(`📄 PDF attachment found: ${att.filename}`);
+        } else if (att.contentType?.includes('spreadsheet') || att.contentType?.includes('excel') || 
+                   att.filename?.match(/\.(xlsx?|csv)$/i)) {
+          pdfBuffers.push(att.content);
+          console.log(`📊 Spreadsheet attachment found: ${att.filename}`);
+        } else {
+          console.log(`⏭️ Skipping non-quote attachment: ${att.filename} (${att.contentType})`);
+        }
+      }
+
+      const result = await this.quotesService.parseQuoteFromEmail(
+        rfqId,
+        emailData.body || '',
+        pdfBuffers.length > 0 ? pdfBuffers : undefined,
+      );
+
+      console.log('✅ Quote processed successfully!');
+      console.log(`  Quote ID: ${result.quote.id}`);
+      console.log(`  Items created: ${result.itemsCreated}`);
+      console.log(`  Matched with prices: ${result.matchedItems}`);
+      console.log(`  Parse source: ${result.parseSource}`);
+
       return {
-        error: error.message,
-        from: payload?.from,
-        subject: payload?.subject,
+        success: true,
+        rfqId,
+        quoteId: result.quote.id,
+        itemsCreated: result.itemsCreated,
+        matchedItems: result.matchedItems,
+        parseSource: result.parseSource,
       };
+    } catch (error) {
+      console.error('❌ Error processing inbound email:', error.message);
+      console.error('  Stack:', error.stack);
+      return { error: error.message };
     }
   }
 
-  private async processQuote(rfqId: string, payload: any, req: Request) {
-    // Verify RFQ exists (searching by rfqNumber, NOT id)
-    const rfq = await this.quotesService['prisma'].rFQ.findUnique({
-      where: { rfqNumber: rfqId },
-      include: { vendor: true },
-    });
-
-    if (!rfq) {
-      console.log(`⚠️ RFQ with number ${rfqId} not found`);
-      return { error: 'RFQ not found' };
-    }
-
-    console.log(`✅ RFQ found: ${rfq.rfqNumber} for ${rfq.vendor.name}`);
-
-    // Extract attachments (multer stores files in req.files)
-    const attachments: Buffer[] = [];
-    const files = (req as any).files || [];
-    
-    console.log(`📎 Multer parsed ${files.length} files`);
-    
-    for (const file of files) {
+  private async extractEmailData(payload: any, multerFiles: any[]): Promise<{
+    from: string;
+    to: string;
+    subject: string;
+    body: string;
+    attachments: { filename: string; contentType: string; content: Buffer }[];
+  }> {
+    // MODE 1: Raw MIME mode - SendGrid sends full email in 'email' field
+    if (payload.email) {
+      console.log('📧 Processing RAW MIME mode');
       try {
-        // Multer provides the buffer directly
-        attachments.push(file.buffer);
-        console.log(`  📎 Attachment: ${file.originalname || file.fieldname} (${file.mimetype})`);
-      } catch (error) {
-        console.error(`Failed to process file ${file.originalname}:`, error.message);
+        const parsed = await simpleParser(payload.email);
+        const attachments = (parsed.attachments || []).map(att => ({
+          filename: att.filename || 'attachment',
+          contentType: att.contentType || 'application/octet-stream',
+          content: att.content,
+        }));
+
+        return {
+          from: parsed.from?.text || payload.from || '',
+          to: parsed.to?.text || payload.to || '',
+          subject: parsed.subject || payload.subject || '',
+          body: parsed.text || parsed.html?.replace(/<[^>]+>/g, ' ') || '',
+          attachments,
+        };
+      } catch (err) {
+        console.error('Failed to parse raw MIME:', err.message);
       }
     }
 
-    console.log(`📎 Total attachments ready for parsing: ${attachments.length}`);
+    // MODE 2: Parsed mode - SendGrid sends separate fields + multer files
+    console.log('📧 Processing PARSED mode');
+    const attachments: { filename: string; contentType: string; content: Buffer }[] = [];
 
-    // Parse quote
-    const emailBody = payload.text || payload.html || '';
-    const result = await this.quotesService.parseQuoteFromEmail(
-      rfqId,
-      emailBody,
-      attachments.length > 0 ? attachments : undefined,
-    );
+    // Get attachments from multer
+    for (const file of multerFiles) {
+      attachments.push({
+        filename: file.originalname || file.fieldname || 'attachment',
+        contentType: file.mimetype || 'application/octet-stream',
+        content: file.buffer,
+      });
+    }
 
-    console.log(`✅ Quote parsed successfully!`);
-    console.log(`  Quote ID: ${result.quote.id}`);
-    console.log(`  Items: ${result.itemsCreated}`);
-    console.log(`  Pricing updates: ${result.pricingUpdates}`);
-
-    // TODO: Send notification to admin
-    // await this.sendNotification(rfq, result);
+    // Also check for attachment-info field (SendGrid includes metadata)
+    if (payload['attachment-info']) {
+      try {
+        const attachInfo = JSON.parse(payload['attachment-info']);
+        console.log('  Attachment info:', JSON.stringify(attachInfo));
+      } catch { /* not critical */ }
+    }
 
     return {
-      success: true,
-      rfqId,
-      quoteId: result.quote.id,
-      itemsCreated: result.itemsCreated,
-      pricingUpdates: result.pricingUpdates,
+      from: payload.from || '',
+      to: payload.to || '',
+      subject: payload.subject || '',
+      body: payload.text || payload.html?.replace(/<[^>]+>/g, ' ') || '',
+      attachments,
     };
   }
 }
-
