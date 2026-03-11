@@ -1,48 +1,31 @@
-import { Controller, Post, Body, Headers, Req } from '@nestjs/common';
+import { Controller, Post, Get, Headers, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiExcludeEndpoint } from '@nestjs/swagger';
 import { QuotesService } from '../quotes/quotes.service';
 import { Request } from 'express';
-
-interface SendGridAttachment {
-  content: string; // base64
-  type: string;
-  filename: string;
-  disposition: string;
-  content_id: string;
-}
-
-interface SendGridInbound {
-  headers: string;
-  dkim: string;
-  to: string;
-  from: string;
-  sender_ip: string;
-  spam_report: string;
-  envelope: string;
-  subject: string;
-  charsets: string;
-  SPF: string;
-  attachments?: string; // Count
-  [key: string]: any; // attachment1, attachment2, etc.
-  text?: string;
-  html?: string;
-  spam_score?: string;
-}
 
 @ApiTags('Webhooks')
 @Controller('webhooks')
 export class WebhooksController {
   constructor(private quotesService: QuotesService) {}
 
+  @Get('test')
+  @ApiOperation({ summary: 'Test webhook endpoint is reachable' })
+  async testWebhook() {
+    console.log('🔔 Webhook test endpoint hit');
+    return {
+      ok: true,
+      timestamp: new Date().toISOString(),
+      message: 'Webhook endpoint is reachable. POST to /api/webhooks/sendgrid-inbound for inbound emails.',
+    };
+  }
+
   @Post('sendgrid-inbound')
-  @ApiExcludeEndpoint() // Don't show in Swagger (webhook endpoint)
   @ApiOperation({ summary: 'Receive inbound emails from SendGrid' })
   async handleSendGridInbound(
     @Req() req: Request,
     @Headers() headers: any,
   ) {
-    // Access body directly from Express request
-    const payload: SendGridInbound = req.body;
+    const payload = req.body || {};
     
     console.log('📧 ==========================================');
     console.log('📧 INBOUND EMAIL RECEIVED FROM SENDGRID');
@@ -53,7 +36,8 @@ export class WebhooksController {
     console.log(`  From: ${payload?.from}`);
     console.log(`  To: ${payload?.to}`);
     console.log(`  Subject: ${payload?.subject}`);
-    console.log(`  Attachments: ${payload?.attachments || '0'}`);
+    console.log(`  Attachments count: ${payload?.attachments || '0'}`);
+    console.log(`  Files from multer: ${(req as any).files?.length || 0}`);
 
     // Optional: Verify SendGrid signature for security
     if (process.env.SENDGRID_WEBHOOK_SECRET) {
@@ -69,20 +53,20 @@ export class WebhooksController {
     }
 
     try {
-      // Extract RFQ ID from subject line first (more reliable)
-      // Format: "Re: Request for Quote - RFQ-1764806865987"
+      const subject = payload?.subject || '';
+      const to = payload?.to || '';
+      const from = payload?.from || '';
+      
       let rfqId: string | null = null;
       
-      // Try subject line first - capture the full "RFQ-XXXXX" format
-      const subjectMatch = payload.subject.match(/(RFQ-[0-9]+)/i);
+      const subjectMatch = subject.match(/(RFQ-[0-9]+)/i);
       if (subjectMatch) {
-        rfqId = subjectMatch[1]; // Captures "RFQ-1764806865987"
+        rfqId = subjectMatch[1];
         console.log(`📋 RFQ ID from subject: ${rfqId}`);
       }
       
-      // Fallback to recipient email
       if (!rfqId) {
-        const rfqMatch = payload.to.match(/rfq-(.+?)@/);
+        const rfqMatch = to.match(/rfq-(.+?)@/);
         if (rfqMatch) {
           rfqId = rfqMatch[1];
           console.log(`📋 RFQ ID from recipient: ${rfqId}`);
@@ -91,23 +75,24 @@ export class WebhooksController {
       
       if (!rfqId) {
         console.log('⚠️ Could not identify RFQ from subject or recipient');
-        console.log(`  Subject: ${payload.subject}`);
-        console.log(`  To: ${payload.to}`);
+        console.log(`  Subject: ${subject}`);
+        console.log(`  To: ${to}`);
         return { error: 'Could not identify RFQ. Please include RFQ number in subject.' };
       }
 
       return await this.processQuote(rfqId, payload, req);
     } catch (error) {
       console.error('❌ Error processing inbound email:', error);
+      console.error('  Stack:', error.stack);
       return {
         error: error.message,
-        from: payload.from,
-        subject: payload.subject,
+        from: payload?.from,
+        subject: payload?.subject,
       };
     }
   }
 
-  private async processQuote(rfqId: string, payload: SendGridInbound, req: Request) {
+  private async processQuote(rfqId: string, payload: any, req: Request) {
     // Verify RFQ exists (searching by rfqNumber, NOT id)
     const rfq = await this.quotesService['prisma'].rFQ.findUnique({
       where: { rfqNumber: rfqId },

@@ -8,6 +8,7 @@ import * as multer from 'multer';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     logger: ['error', 'warn', 'log'],
+    bodyParser: false, // Disable default so we control parsing order
   });
 
   // Global validation
@@ -15,7 +16,7 @@ async function bootstrap() {
     new ValidationPipe({
       transform: true,
       whitelist: true,
-      forbidNonWhitelisted: false, // Allow extra properties for now
+      forbidNonWhitelisted: false,
     }),
   );
 
@@ -30,13 +31,26 @@ async function bootstrap() {
     credentials: true,
   });
 
-  // Parse URL-encoded bodies (SendGrid webhook format)
+  // Log all webhook requests FIRST for diagnostics
+  const expressApp = app.getHttpAdapter().getInstance();
+  expressApp.all('/api/webhooks/*', (req: any, res: any, next: any) => {
+    console.log(`🔔 WEBHOOK HIT: ${req.method} ${req.url}`);
+    console.log(`   Content-Type: ${req.headers['content-type']}`);
+    console.log(`   Content-Length: ${req.headers['content-length']}`);
+    console.log(`   User-Agent: ${req.headers['user-agent']}`);
+    next();
+  });
+
+  // Parse multipart/form-data for SendGrid webhook BEFORE other body parsers
+  const upload = multer({ limits: { fileSize: 50 * 1024 * 1024 } });
+  expressApp.post('/api/webhooks/sendgrid-inbound', upload.any(), (req: any, _res: any, next: any) => {
+    console.log(`📎 Multer parsed: ${(req.files || []).length} files, body keys: ${Object.keys(req.body || {}).join(', ')}`);
+    next();
+  });
+
+  // Standard body parsers for all other routes
   app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
   app.use(bodyParser.json({ limit: '50mb' }));
-  
-  // Parse multipart/form-data (SendGrid sends this format)
-  const upload = multer();
-  app.use('/api/webhooks/sendgrid-inbound', upload.any());
 
   // Swagger documentation
   const config = new DocumentBuilder()
