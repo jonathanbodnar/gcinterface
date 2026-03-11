@@ -190,6 +190,21 @@ export class RFQService {
       },
     });
 
+    // Update project status to RFQ_SENT if not already further along
+    try {
+      const project = await this.prisma.project.findUnique({
+        where: { id: rfq.projectId },
+        select: { status: true },
+      });
+      const earlyStatuses = ['SCOPE_DIAGNOSIS', 'BOM_GENERATION', 'VENDOR_MATCHING'];
+      if (project && earlyStatuses.includes(project.status)) {
+        await this.prisma.project.update({
+          where: { id: rfq.projectId },
+          data: { status: 'RFQ_SENT' },
+        });
+      }
+    } catch { /* non-critical */ }
+
     return {
       success: true,
       emailSent,

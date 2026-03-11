@@ -180,7 +180,7 @@ export class QuotesService {
       data: {
         projectId: rfq.projectId,
         vendorId: rfq.vendorId,
-        rfqId: rfq.id, // Use the database ID, not the rfqNumber
+        rfqId: rfq.id,
         quoteNumber: quoteData.quoteNumber || `Q-${Date.now()}`,
         totalAmount: quoteData.totalAmount,
         validUntil: quoteData.validUntil,
@@ -189,6 +189,20 @@ export class QuotesService {
         status: 'RECEIVED',
       },
     });
+
+    // Update RFQ status to RESPONDED
+    await this.prisma.rFQ.update({
+      where: { id: rfq.id },
+      data: { status: 'RESPONDED' },
+    });
+
+    // Update project status to QUOTE_COMPARISON
+    try {
+      await this.prisma.project.update({
+        where: { id: rfq.projectId },
+        data: { status: 'QUOTE_COMPARISON' },
+      });
+    } catch { /* non-critical */ }
 
     // Create quote items AND update vendor pricing
     let pricingUpdates = 0;
