@@ -182,25 +182,22 @@ export class QuotesService {
       });
     } catch { /* non-critical */ }
 
-    // ALWAYS create QuoteItems for every RFQ item (what we asked for).
-    // Then overlay any parsed prices we could match.
+    // Only create QuoteItems for RFQ items the vendor actually quoted on.
     let matchedCount = 0;
     let pricingUpdates = 0;
     const parsedItems = quoteData?.items || [];
+    let computedTotal = 0;
 
     for (const rfqItem of rfq.items) {
       const bomItem = rfqItem.bomItem;
-
-      // Try to find a matching parsed price for this BOM item
       const matchedParsed = this.matchParsedToRFQItem(rfqItem, parsedItems);
 
-      const unitPrice = matchedParsed?.unitPrice || 0;
-      const totalPrice = matchedParsed?.totalPrice || 0;
-      const matchNotes = matchedParsed
-        ? `Auto-matched from ${parseSource}: "${matchedParsed.description}"`
-        : `Awaiting manual price entry`;
+      if (!matchedParsed) continue;
 
-      if (matchedParsed) matchedCount++;
+      matchedCount++;
+      const unitPrice = matchedParsed.unitPrice;
+      const totalPrice = matchedParsed.totalPrice;
+      computedTotal += totalPrice;
 
       await this.prisma.quoteItem.create({
         data: {
@@ -212,11 +209,10 @@ export class QuotesService {
           unitPrice,
           totalPrice,
           isAlternate: false,
-          notes: matchNotes,
+          notes: `Auto-matched from ${parseSource}: "${matchedParsed.description}"`,
         },
       });
 
-      // Update vendor pricing if we have a price
       if (bomItem.materialId && unitPrice > 0) {
         try {
           await this.prisma.vendorMaterialPricing.upsert({
@@ -250,22 +246,15 @@ export class QuotesService {
       }
     }
 
-    // Update quote total from matched items if we have better data
-    if (matchedCount > 0) {
-      const computedTotal = rfq.items.reduce((sum, rfqItem) => {
-        const matched = this.matchParsedToRFQItem(rfqItem, parsedItems);
-        return sum + (matched?.totalPrice || 0);
-      }, 0);
-      if (computedTotal > 0) {
-        await this.prisma.quote.update({
-          where: { id: quote.id },
-          data: { totalAmount: computedTotal },
-        });
-      }
+    if (computedTotal > 0) {
+      await this.prisma.quote.update({
+        where: { id: quote.id },
+        data: { totalAmount: computedTotal },
+      });
     }
 
     console.log(`✅ Quote created: ${quote.quoteNumber}`);
-    console.log(`   ${rfq.items.length} line items created (${matchedCount} with prices from ${parseSource})`);
+    console.log(`   ${matchedCount} line items created from ${rfq.items.length} RFQ items (parsed from ${parseSource})`);
     console.log(`   ${pricingUpdates} vendor prices updated`);
 
     return {
@@ -327,12 +316,12 @@ export class QuotesService {
     if (!quote) throw new Error('Quote not found');
     if (!quote.rfq) throw new Error('Quote has no linked RFQ');
 
-    // Delete existing items (if any garbage was created before)
+    // Only repopulate if the quote has zero items (don't wipe existing parsed data)
     if (quote.items.length > 0) {
-      await this.prisma.quoteItem.deleteMany({ where: { quoteId } });
+      return { quoteId, itemsCreated: quote.items.length };
     }
 
-    // Create a QuoteItem for every RFQ item
+    // Fallback: create items only for RFQ items (for manual price entry)
     let created = 0;
     for (const rfqItem of quote.rfq.items) {
       await this.prisma.quoteItem.create({
@@ -351,7 +340,6 @@ export class QuotesService {
       created++;
     }
 
-    // Reset quote total
     await this.prisma.quote.update({
       where: { id: quoteId },
       data: { totalAmount: 0 },

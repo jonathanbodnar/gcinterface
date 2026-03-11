@@ -60,15 +60,6 @@ export default function StepAwardVendors() {
 
       let quoteList = quoteRes.data || [];
 
-      // Auto-populate items for any quotes that have zero line items
-      for (const q of quoteList) {
-        if ((q._count?.items || 0) === 0) {
-          try {
-            await axios.post(`${API_URL}/quotes/${q.id}/populate-items`);
-          } catch { /* may fail if already populated */ }
-        }
-      }
-
       const detailPromises = quoteList.map((q: any) =>
         axios.get(`${API_URL}/quotes/${q.id}`).catch(() => ({ data: null }))
       );
@@ -85,10 +76,9 @@ export default function StepAwardVendors() {
           const lineItemTotal = detail.items.reduce(
             (sum: number, item: any) => sum + (item.totalPrice || 0), 0
           );
-          const pricedItems = detail.items.filter((i: any) => i.unitPrice > 0).length;
-          return { ...q, computedTotal: lineItemTotal, pricedItems, totalItems: detail.items.length };
+          return { ...q, computedTotal: lineItemTotal, totalItems: detail.items.length };
         }
-        return { ...q, computedTotal: q.totalAmount || 0, pricedItems: 0, totalItems: 0 };
+        return { ...q, computedTotal: q.totalAmount || 0, totalItems: 0 };
       });
       setQuotes(quotesWithTotals);
 
@@ -295,9 +285,7 @@ export default function StepAwardVendors() {
             const isExpanded = expandedQuote === quote.id;
             const isAwarded = quote.status === 'AWARDED';
             const displayTotal = quote.computedTotal || 0;
-            const pricedCount = quote.pricedItems || 0;
             const totalItemCount = quote.totalItems || 0;
-            const needsPricing = totalItemCount > 0 && pricedCount < totalItemCount;
 
             return (
               <Card key={quote.id} className={cn(isAwarded && 'ring-2 ring-green-500')}>
@@ -312,19 +300,14 @@ export default function StepAwardVendors() {
                           </Badge>
                         )}
                         <Badge variant="secondary">
-                          {pricedCount}/{totalItemCount} items priced
+                          {totalItemCount} item{totalItemCount !== 1 ? 's' : ''} quoted
                         </Badge>
                       </div>
                       <div className="flex items-center gap-4 text-sm text-muted-foreground">
                         <span>RFQ: {rfq?.rfqNumber || '-'}</span>
                         <span>Received: {new Date(quote.receivedAt || quote.createdAt).toLocaleDateString()}</span>
                       </div>
-                      {needsPricing && (
-                        <div className="mt-2 flex items-center gap-2 text-xs text-yellow-600">
-                          <Pencil className="w-3 h-3" />
-                          {totalItemCount - pricedCount} item{totalItemCount - pricedCount !== 1 ? 's' : ''} need manual pricing — expand to enter prices
-                        </div>
-                      )}
+                      
                     </div>
                     <div className="text-right">
                       <div className="text-2xl font-bold">
@@ -343,7 +326,7 @@ export default function StepAwardVendors() {
                           {isExpanded ? 'Hide' : 'View'} Details
                           {isExpanded ? <ChevronDown className="w-4 h-4 ml-1" /> : <ChevronRight className="w-4 h-4 ml-1" />}
                         </Button>
-                        {!isAwarded && quote.status !== 'REJECTED' && pricedCount > 0 && (
+                        {!isAwarded && quote.status !== 'REJECTED' && totalItemCount > 0 && (
                           <Button
                             size="sm"
                             onClick={() => awardVendor(quote.id)}
@@ -383,10 +366,9 @@ export default function StepAwardVendors() {
                           <TableBody>
                             {detail.items.map((item: any) => {
                               const isEditing = editingItem === item.id;
-                              const hasPriceData = item.unitPrice > 0;
 
                               return (
-                                <TableRow key={item.id} className={cn(!hasPriceData && 'bg-yellow-50/50 dark:bg-yellow-950/20')}>
+                                <TableRow key={item.id}>
                                   <TableCell className="font-medium">
                                     {item.description}
                                     {item.isAlternate && (
@@ -412,18 +394,14 @@ export default function StepAwardVendors() {
                                           autoFocus
                                         />
                                       </div>
-                                    ) : hasPriceData ? (
-                                      `$${item.unitPrice?.toFixed(2)}`
                                     ) : (
-                                      <span className="text-yellow-600 text-xs">needs price</span>
+                                      `$${item.unitPrice?.toFixed(2)}`
                                     )}
                                   </TableCell>
                                   <TableCell className="text-right font-semibold">
                                     {isEditing && editPrice
                                       ? `$${(parseFloat(editPrice) * item.quantity).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
-                                      : hasPriceData
-                                        ? `$${item.totalPrice?.toLocaleString()}`
-                                        : '-'
+                                      : `$${item.totalPrice?.toLocaleString()}`
                                     }
                                   </TableCell>
                                   <TableCell>
