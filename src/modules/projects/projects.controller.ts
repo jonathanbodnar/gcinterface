@@ -111,7 +111,8 @@ export class ProjectsController {
   @Get()
   @ApiOperation({ summary: 'List all projects' })
   async listProjects(@Request() req) {
-    return this.projectsService.listProjects(req.user.userId);
+    const isAdmin = req.user.role === 'ADMIN';
+    return this.projectsService.listProjects(isAdmin ? undefined : req.user.userId);
   }
 
   @Get(':id')
