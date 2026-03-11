@@ -34,14 +34,6 @@ export default function PlanViewerPage() {
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
   const [pdfUrl, setPdfUrl] = useState<string>('');
 
-  // Trade colors for highlighting
-  const tradeColors: Record<string, string> = {
-    M: '#ef4444', // Red
-    P: '#3b82f6', // Blue
-    E: '#22c55e', // Green
-    A: '#eab308', // Yellow
-  };
-
   useEffect(() => {
     loadProjectData();
   }, [id]);
