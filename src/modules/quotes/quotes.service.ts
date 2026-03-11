@@ -304,6 +304,59 @@ export class QuotesService {
     return bestMatch;
   }
 
+  async populateQuoteItems(quoteId: string) {
+    const quote = await this.prisma.quote.findUnique({
+      where: { id: quoteId },
+      include: {
+        rfq: {
+          include: {
+            items: {
+              include: {
+                bomItem: { include: { material: true } },
+              },
+            },
+          },
+        },
+        items: true,
+      },
+    });
+
+    if (!quote) throw new Error('Quote not found');
+    if (!quote.rfq) throw new Error('Quote has no linked RFQ');
+
+    // Delete existing items (if any garbage was created before)
+    if (quote.items.length > 0) {
+      await this.prisma.quoteItem.deleteMany({ where: { quoteId } });
+    }
+
+    // Create a QuoteItem for every RFQ item
+    let created = 0;
+    for (const rfqItem of quote.rfq.items) {
+      await this.prisma.quoteItem.create({
+        data: {
+          quoteId,
+          bomItemId: rfqItem.bomItem.id,
+          description: rfqItem.bomItem.description,
+          quantity: rfqItem.quantity,
+          uom: rfqItem.uom,
+          unitPrice: 0,
+          totalPrice: 0,
+          isAlternate: false,
+          notes: 'Awaiting manual price entry',
+        },
+      });
+      created++;
+    }
+
+    // Reset quote total
+    await this.prisma.quote.update({
+      where: { id: quoteId },
+      data: { totalAmount: 0 },
+    });
+
+    return { quoteId, itemsCreated: created };
+  }
+
   async updateQuoteItem(quoteItemId: string, data: { unitPrice: number; totalPrice: number }) {
     const item = await this.prisma.quoteItem.update({
       where: { id: quoteItemId },

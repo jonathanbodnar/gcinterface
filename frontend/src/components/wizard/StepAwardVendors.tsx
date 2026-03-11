@@ -58,7 +58,16 @@ export default function StepAwardVendors() {
       setRfqs(rfqRes.data || []);
       setBomStatuses(bomStatusRes.data || []);
 
-      const quoteList = quoteRes.data || [];
+      let quoteList = quoteRes.data || [];
+
+      // Auto-populate items for any quotes that have zero line items
+      for (const q of quoteList) {
+        if ((q._count?.items || 0) === 0) {
+          try {
+            await axios.post(`${API_URL}/quotes/${q.id}/populate-items`);
+          } catch { /* may fail if already populated */ }
+        }
+      }
 
       const detailPromises = quoteList.map((q: any) =>
         axios.get(`${API_URL}/quotes/${q.id}`).catch(() => ({ data: null }))

@@ -48,6 +48,12 @@ export class QuotesController {
     return this.quotesService.levelBids(projectId);
   }
 
+  @Post(':id/populate-items')
+  @ApiOperation({ summary: 'Populate quote with line items from its RFQ (for re-processing)' })
+  async populateItems(@Param('id') id: string) {
+    return this.quotesService.populateQuoteItems(id);
+  }
+
   @Put('items/:itemId')
   @ApiOperation({ summary: 'Update a quote item price' })
   async updateQuoteItem(
