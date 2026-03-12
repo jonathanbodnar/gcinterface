@@ -66,8 +66,8 @@ export class BOMController {
       };
     });
 
-    // Consolidate duplicates if requested
-    if (consolidate === 'true') {
+    // Always consolidate duplicates (unless explicitly disabled)
+    if (consolidate !== 'false') {
       const groups = new Map<string, typeof enriched>();
       for (const item of enriched) {
         const key = `${(item.description || '').toLowerCase().trim()}||${(item.uom || '').toLowerCase()}`;
