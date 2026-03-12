@@ -118,12 +118,29 @@ export default function StepReviewBOM() {
     }
   }, [editing]);
 
+  const consolidateItems = (rawItems: MaterialItem[]): MaterialItem[] => {
+    const groups = new Map<string, MaterialItem>();
+    for (const m of rawItems) {
+      const key = `${(m.description || '').toLowerCase().trim()}||${(m.uom || '').toLowerCase()}`;
+      if (!groups.has(key)) {
+        groups.set(key, { ...m, _consolidatedCount: 1 });
+      } else {
+        const existing = groups.get(key)!;
+        existing.qty = (existing.qty || 0) + (m.qty || 0);
+        existing.totalPrice = existing.qty * (existing.unitPrice || 0);
+        existing._consolidatedCount = (existing._consolidatedCount || 1) + 1;
+        if ((m.confidence || 0) > (existing.confidence || 0)) existing.confidence = m.confidence;
+      }
+    }
+    return Array.from(groups.values());
+  };
+
   const loadMaterials = async () => {
     setLoading(true);
     try {
       let items: MaterialItem[] = [];
 
-      // Load consolidated BOM from backend
+      // Load BOM from backend
       if (projectId) {
         try {
           const bomRes = await axios.get(`${API_URL}/bom?projectId=${projectId}&consolidate=true`);
@@ -146,7 +163,7 @@ export default function StepReviewBOM() {
             }));
           }
         } catch (err) {
-          console.warn('BOM consolidation fetch failed, trying takeoff API:', err);
+          console.warn('BOM fetch failed, trying takeoff API:', err);
         }
       }
 
@@ -154,25 +171,14 @@ export default function StepReviewBOM() {
       if (items.length === 0 && takeoffJobId) {
         try {
           const data = await takeoffApi.getMaterials(takeoffJobId);
-          const rawItems = data?.items || [];
-          // Consolidate client-side as fallback
-          const groups = new Map<string, any>();
-          for (const m of rawItems) {
-            const key = `${(m.description || '').toLowerCase().trim()}||${(m.uom || '').toLowerCase()}`;
-            if (!groups.has(key)) {
-              groups.set(key, { ...m, _deleted: false, _edited: false, _consolidatedCount: 1 });
-            } else {
-              const existing = groups.get(key)!;
-              existing.qty = (existing.qty || 0) + (m.qty || 0);
-              existing.totalPrice = (existing.qty || 0) * (existing.unitPrice || 0);
-              existing._consolidatedCount = (existing._consolidatedCount || 1) + 1;
-            }
-          }
-          items = Array.from(groups.values());
+          items = (data?.items || []).map((m: any) => ({ ...m, _deleted: false, _edited: false }));
         } catch (err) {
           console.error('Takeoff API fetch failed:', err);
         }
       }
+
+      // Always consolidate client-side to handle duplicates from any source
+      items = consolidateItems(items);
 
       setMaterials(items);
       setOriginalMaterials(JSON.parse(JSON.stringify(items)));
