@@ -281,6 +281,58 @@ export class BOMController {
     return { success: true };
   }
 
+  @Post('consolidate/:projectId')
+  @ApiOperation({ summary: 'Permanently consolidate duplicate BOM items in the database' })
+  async consolidateBOM(@Param('projectId') projectId: string) {
+    const bomItems = await this.prisma.bOM.findMany({
+      where: { projectId },
+      orderBy: [{ description: 'asc' }],
+    });
+
+    const groups = new Map<string, typeof bomItems>();
+    for (const item of bomItems) {
+      const key = `${(item.description || '').toLowerCase().trim()}||${(item.uom || '').toLowerCase()}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(item);
+    }
+
+    let merged = 0;
+    let deleted = 0;
+    for (const [, group] of groups) {
+      if (group.length <= 1) continue;
+      const keep = group[0];
+      const others = group.slice(1);
+      const totalQty = group.reduce((s, g) => s + (g.quantity || 0), 0);
+      const totalFinalQty = group.reduce((s, g) => s + (g.finalQty || 0), 0);
+      const maxConf = Math.max(...group.map(g => g.confidence || 0));
+      const unitCost = keep.unitCost || 0;
+
+      await this.prisma.bOM.update({
+        where: { id: keep.id },
+        data: {
+          quantity: totalQty,
+          finalQty: totalFinalQty,
+          totalCost: totalFinalQty * unitCost,
+          confidence: maxConf,
+          notes: `Consolidated from ${group.length} items`,
+        },
+      });
+
+      for (const other of others) {
+        await this.prisma.bOM.delete({ where: { id: other.id } });
+        deleted++;
+      }
+      merged++;
+    }
+
+    return {
+      success: true,
+      message: `Consolidated ${merged} groups, deleted ${deleted} duplicates`,
+      before: bomItems.length,
+      after: bomItems.length - deleted,
+    };
+  }
+
   @Post('generate/:projectId')
   @ApiOperation({ summary: 'Generate BOM from takeoff data' })
   async generateBOM(@Param('projectId') projectId: string, @Request() req) {
