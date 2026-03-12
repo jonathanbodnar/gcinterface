@@ -57,6 +57,9 @@ interface MaterialItem {
   unitPrice: number;
   totalPrice: number;
   category: string;
+  confidence?: number;
+  bestPrice?: { unitCost: number; vendorName: string } | null;
+  _consolidatedCount?: number;
   specifications?: Record<string, any>;
   _deleted?: boolean;
   _edited?: boolean;
@@ -117,12 +120,41 @@ export default function StepReviewBOM() {
   const loadMaterials = async () => {
     setLoading(true);
     try {
-      if (takeoffJobId) {
-        const data = await takeoffApi.getMaterials(takeoffJobId);
-        const items = (data?.items || []).map((m: MaterialItem) => ({ ...m, _deleted: false, _edited: false }));
-        setMaterials(items);
-        setOriginalMaterials(JSON.parse(JSON.stringify(items)));
+      let items: MaterialItem[] = [];
+
+      // Try loading consolidated BOM from our backend first
+      if (projectId) {
+        try {
+          const bomRes = await axios.get(`${API_URL}/bom?projectId=${projectId}&consolidate=true`);
+          const bomData = bomRes.data?.items || [];
+          if (bomData.length > 0) {
+            items = bomData.map((m: any) => ({
+              sku: m.sku || '',
+              description: m.description,
+              qty: m.finalQty || m.quantity,
+              uom: m.uom,
+              unitPrice: m.unitCost || 0,
+              totalPrice: m.totalCost || 0,
+              category: m.category || 'Other',
+              confidence: m.confidence,
+              bestPrice: m.bestPrice || null,
+              _consolidatedCount: m._consolidatedCount || 1,
+              specifications: m.specs || undefined,
+              _deleted: false,
+              _edited: false,
+            }));
+          }
+        } catch { /* fall through to takeoff API */ }
       }
+
+      // Fallback to takeoff API if no BOM data
+      if (items.length === 0 && takeoffJobId) {
+        const data = await takeoffApi.getMaterials(takeoffJobId);
+        items = (data?.items || []).map((m: any) => ({ ...m, _deleted: false, _edited: false }));
+      }
+
+      setMaterials(items);
+      setOriginalMaterials(JSON.parse(JSON.stringify(items)));
     } catch (err) {
       console.error('Failed to load materials:', err);
     } finally {
@@ -488,7 +520,7 @@ export default function StepReviewBOM() {
           </div>
 
           {/* Summary Cards */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-4 gap-3">
             <div className="bg-muted/50 rounded-lg p-3 text-center">
               <div className="text-xl font-bold">{filtered.length}</div>
               <div className="text-xs text-muted-foreground">Items</div>
@@ -504,6 +536,21 @@ export default function StepReviewBOM() {
                 {fmtCurrency(filtered.reduce((s, m) => s + (m.totalPrice || 0), 0))}
               </div>
               <div className="text-xs text-muted-foreground">Est. Value</div>
+            </div>
+            <div className="bg-muted/50 rounded-lg p-3 text-center">
+              {(() => {
+                const withConf = activeMaterials.filter(m => m.confidence != null && m.confidence > 0);
+                const avg = withConf.length > 0 ? withConf.reduce((s, m) => s + (m.confidence || 0), 0) / withConf.length : 0;
+                const pct = avg > 1 ? avg : avg * 100;
+                return (
+                  <>
+                    <div className={cn('text-xl font-bold', pct >= 85 ? 'text-green-600' : pct >= 70 ? 'text-yellow-600' : 'text-red-600')}>
+                      {pct > 0 ? `${pct.toFixed(0)}%` : '—'}
+                    </div>
+                    <div className="text-xs text-muted-foreground">Avg Confidence</div>
+                  </>
+                );
+              })()}
             </div>
           </div>
 
@@ -570,19 +617,21 @@ export default function StepReviewBOM() {
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-10"></TableHead>
-                      <TableHead className="min-w-[250px]">Description</TableHead>
+                      <TableHead className="min-w-[200px]">Description</TableHead>
                       <TableHead className="whitespace-nowrap">Category</TableHead>
+                      <TableHead className="whitespace-nowrap text-center">Confidence</TableHead>
                       <TableHead className="whitespace-nowrap text-right">Qty</TableHead>
                       <TableHead className="whitespace-nowrap">UOM</TableHead>
                       <TableHead className="whitespace-nowrap text-right">Unit Price</TableHead>
                       <TableHead className="whitespace-nowrap text-right">Total</TableHead>
+                      <TableHead className="whitespace-nowrap text-right">Best Quote</TableHead>
                       <TableHead className="w-10"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filtered.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                        <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                           {search ? 'No materials match your search' : 'No materials found'}
                         </TableCell>
                       </TableRow>
@@ -636,6 +685,20 @@ export default function StepReviewBOM() {
                                 {item.category || 'Other'}
                               </Badge>
                             </TableCell>
+                            <TableCell className="whitespace-nowrap text-center">
+                              {(() => {
+                                const c = item.confidence;
+                                if (c == null || c === 0) return <span className="text-xs text-muted-foreground">—</span>;
+                                const pct = c > 1 ? c : c * 100;
+                                const color = pct >= 85 ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                                  : pct >= 70 ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+                                  : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
+                                return <Badge className={cn('text-xs', color)}>{pct.toFixed(0)}%</Badge>;
+                              })()}
+                              {item._consolidatedCount && item._consolidatedCount > 1 && (
+                                <div className="text-[10px] text-muted-foreground mt-0.5">{item._consolidatedCount} items</div>
+                              )}
+                            </TableCell>
                             <TableCell className="whitespace-nowrap text-right">
                               {renderEditableCell(
                                 globalIdx,
@@ -662,6 +725,16 @@ export default function StepReviewBOM() {
                             </TableCell>
                             <TableCell className="whitespace-nowrap text-right font-semibold">
                               {fmtCurrency(item.totalPrice)}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap text-right">
+                              {item.bestPrice ? (
+                                <div>
+                                  <span className="text-green-600 font-medium text-sm">{fmtCurrencyFull(item.bestPrice.unitCost)}</span>
+                                  <div className="text-[10px] text-muted-foreground">{item.bestPrice.vendorName}</div>
+                                </div>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">—</span>
+                              )}
                             </TableCell>
                             <TableCell className="w-10 px-2">
                               <Button

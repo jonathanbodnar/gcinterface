@@ -376,13 +376,46 @@ export class QuotesService {
         },
       });
 
-      if (bomItem.materialId && unitPrice > 0) {
+      // Ensure materialId is set on the BOM item for vendor pricing tracking
+      let matId = bomItem.materialId;
+      if (!matId && unitPrice > 0) {
+        try {
+          const existing = await this.prisma.material.findFirst({
+            where: {
+              name: { contains: bomItem.description.substring(0, 30), mode: 'insensitive' },
+            },
+          });
+          if (existing) {
+            matId = existing.id;
+          } else {
+            const trade = bomItem.category?.charAt(0)?.toUpperCase() || 'A';
+            const created = await this.prisma.material.create({
+              data: {
+                name: bomItem.description,
+                description: bomItem.description,
+                trade,
+                category: bomItem.category || 'General',
+                uom: rfqItem.uom,
+              },
+            });
+            matId = created.id;
+          }
+          await this.prisma.bOM.update({
+            where: { id: bomItem.id },
+            data: { materialId: matId },
+          });
+        } catch (e) {
+          console.warn(`Could not auto-link material for "${bomItem.description}":`, e.message);
+        }
+      }
+
+      if (matId && unitPrice > 0) {
         try {
           await this.prisma.vendorMaterialPricing.upsert({
             where: {
               vendorId_materialId: {
                 vendorId: rfq.vendorId,
-                materialId: bomItem.materialId,
+                materialId: matId,
               },
             },
             update: {
@@ -394,7 +427,7 @@ export class QuotesService {
             },
             create: {
               vendorId: rfq.vendorId,
-              materialId: bomItem.materialId,
+              materialId: matId,
               unitCost: unitPrice,
               uom: rfqItem.uom,
               lastQuoteDate: new Date(),

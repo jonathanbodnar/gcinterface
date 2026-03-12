@@ -217,8 +217,53 @@ export class BOMGeneratorService {
       throw new Error('Takeoff database not configured');
     }
 
+    // Consolidate duplicate materials (same description + uom)
+    const consolidationMap = new Map<string, any[]>();
+    for (const item of bomItems) {
+      const key = `${(item.description || '').toLowerCase().trim()}||${(item.uom || '').toLowerCase()}`;
+      if (!consolidationMap.has(key)) consolidationMap.set(key, []);
+      consolidationMap.get(key)!.push(item);
+    }
+
+    for (const [, group] of consolidationMap) {
+      if (group.length <= 1) continue;
+      // Keep the first item, sum quantities into it, delete the rest
+      const keep = group[0];
+      const others = group.slice(1);
+      const totalQty = group.reduce((s, g) => s + (g.quantity || 0), 0);
+      const totalFinalQty = group.reduce((s, g) => s + (g.finalQty || 0), 0);
+      const maxConf = Math.max(...group.map(g => g.confidence || 0));
+      const unitCost = keep.unitCost || 0;
+
+      try {
+        await this.prisma.bOM.update({
+          where: { id: keep.id },
+          data: {
+            quantity: totalQty,
+            finalQty: totalFinalQty,
+            totalCost: totalFinalQty * unitCost,
+            confidence: maxConf,
+            notes: `Consolidated from ${group.length} locations`,
+          },
+        });
+        for (const other of others) {
+          await this.prisma.bOM.delete({ where: { id: other.id } });
+        }
+      } catch (err) {
+        console.warn(`Consolidation failed for "${keep.description}":`, err.message);
+      }
+    }
+
+    // Refresh consolidated items
+    const finalItems = await this.prisma.bOM.findMany({
+      where: { projectId, estimateId: estimate.id },
+      orderBy: [{ category: 'asc' }, { description: 'asc' }],
+    });
+
+    console.log(`🔄 Consolidated ${bomItems.length} items → ${finalItems.length} unique materials`);
+
     // Calculate estimate totals
-    const materialCost = bomItems.reduce((sum, item) => sum + (item.totalCost || 0), 0);
+    const materialCost = finalItems.reduce((sum, item) => sum + (item.totalCost || 0), 0);
     await this.prisma.estimate.update({
       where: { id: estimate.id },
       data: {
@@ -228,15 +273,17 @@ export class BOMGeneratorService {
       },
     });
 
-    console.log(`✅ Generated ${bomItems.length} BOM items for project ${projectId}`);
+    console.log(`✅ Generated ${finalItems.length} BOM items for project ${projectId}`);
 
     return {
       estimate,
-      bomItems,
+      bomItems: finalItems,
       summary: {
-        totalItems: bomItems.length,
+        totalItems: finalItems.length,
         totalMaterialCost: materialCost,
-        averageConfidence: bomItems.reduce((sum, item) => sum + (item.confidence || 0), 0) / bomItems.length,
+        averageConfidence: finalItems.length > 0
+          ? finalItems.reduce((sum, item) => sum + (item.confidence || 0), 0) / finalItems.length
+          : 0,
       },
     };
   }

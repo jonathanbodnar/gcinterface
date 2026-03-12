@@ -16,7 +16,10 @@ export class BOMController {
 
   @Get()
   @ApiOperation({ summary: 'Get BOM items for a project' })
-  async getBOM(@Query('projectId') projectId: string) {
+  async getBOM(
+    @Query('projectId') projectId: string,
+    @Query('consolidate') consolidate?: string,
+  ) {
     if (!projectId) {
       throw new Error('projectId query parameter is required');
     }
@@ -30,6 +33,15 @@ export class BOMController {
             name: true,
             trade: true,
             category: true,
+            vendorPricing: {
+              where: { active: true },
+              select: {
+                unitCost: true,
+                vendor: { select: { name: true } },
+              },
+              orderBy: { unitCost: 'asc' },
+              take: 1,
+            },
           },
         },
         estimate: {
@@ -45,18 +57,57 @@ export class BOMController {
       ],
     });
 
-    // Calculate summary
+    // Attach best price from vendor pricing
+    let enriched = bomItems.map(item => {
+      const bestPricing = item.material?.vendorPricing?.[0];
+      return {
+        ...item,
+        bestPrice: bestPricing ? { unitCost: bestPricing.unitCost, vendorName: bestPricing.vendor.name } : null,
+      };
+    });
+
+    // Consolidate duplicates if requested
+    if (consolidate === 'true') {
+      const groups = new Map<string, typeof enriched>();
+      for (const item of enriched) {
+        const key = `${(item.description || '').toLowerCase().trim()}||${(item.uom || '').toLowerCase()}`;
+        if (!groups.has(key)) {
+          groups.set(key, []);
+        }
+        groups.get(key)!.push(item);
+      }
+
+      enriched = Array.from(groups.values()).map(group => {
+        if (group.length === 1) return { ...group[0], _consolidatedCount: 1 };
+        const first = group[0];
+        const totalQty = group.reduce((s, g) => s + (g.quantity || 0), 0);
+        const totalFinalQty = group.reduce((s, g) => s + (g.finalQty || 0), 0);
+        const avgWaste = group.reduce((s, g) => s + (g.wasteFactor || 0), 0) / group.length;
+        const maxConfidence = Math.max(...group.map(g => g.confidence || 0));
+        const unitCost = first.unitCost || 0;
+        return {
+          ...first,
+          quantity: totalQty,
+          finalQty: totalFinalQty,
+          wasteFactor: avgWaste,
+          totalCost: totalFinalQty * unitCost,
+          confidence: maxConfidence,
+          _consolidatedCount: group.length,
+        };
+      });
+    }
+
     const summary = {
-      totalItems: bomItems.length,
-      totalCost: bomItems.reduce((sum, item) => sum + (item.totalCost || 0), 0),
-      averageConfidence: bomItems.length > 0
-        ? bomItems.reduce((sum, item) => sum + (item.confidence || 0), 0) / bomItems.length
+      totalItems: enriched.length,
+      totalCost: enriched.reduce((sum, item) => sum + (item.totalCost || 0), 0),
+      averageConfidence: enriched.length > 0
+        ? enriched.reduce((sum, item) => sum + (item.confidence || 0), 0) / enriched.length
         : 0,
-      byTrade: this.groupByTrade(bomItems),
+      byTrade: this.groupByTrade(enriched),
     };
 
     return {
-      items: bomItems,
+      items: enriched,
       summary,
     };
   }

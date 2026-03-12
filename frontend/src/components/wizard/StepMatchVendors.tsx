@@ -4,7 +4,7 @@ import axios from 'axios';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Loader2, CheckCircle2, Users, Send, FileText, Trophy } from 'lucide-react';
+import { Loader2, CheckCircle2, Users, Send, FileText, Trophy, Package, DollarSign } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
@@ -111,13 +111,16 @@ export default function StepMatchVendors() {
     }
   };
 
-  const matchableItems = bomStatuses.filter(b => b.overallStatus !== 'AWARDED');
-  const awardedItems = bomStatuses.filter(b => b.overallStatus === 'AWARDED');
+  const totalItems = bomStatuses.length;
+  const availableItems = bomStatuses.filter(b => b.overallStatus === 'AVAILABLE');
   const rfqItems = bomStatuses.filter(b => b.overallStatus === 'RFQ_SENT');
   const quotedItems = bomStatuses.filter(b => b.overallStatus === 'QUOTED');
+  const awardedItems = bomStatuses.filter(b => b.overallStatus === 'AWARDED');
+  const remainingItems = bomStatuses.filter(b => b.overallStatus !== 'AWARDED');
+  const progressPct = totalItems > 0 ? Math.round(((quotedItems.length + awardedItems.length) / totalItems) * 100) : 0;
 
   const filteredItems = statusFilter === 'all'
-    ? matchableItems
+    ? bomStatuses
     : bomStatuses.filter(b => {
         if (statusFilter === 'available') return b.overallStatus === 'AVAILABLE';
         if (statusFilter === 'rfq') return b.overallStatus === 'RFQ_SENT';
@@ -145,9 +148,20 @@ export default function StepMatchVendors() {
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Match Vendors</h2>
           <p className="text-muted-foreground">
-            {matchableItems.length} materials need vendors
-            {awardedItems.length > 0 && ` · ${awardedItems.length} awarded`}
+            {totalItems} total materials · {remainingItems.length} remaining · {awardedItems.length} awarded
           </p>
+          <div className="mt-2 w-64">
+            <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+              <span>Progress</span>
+              <span>{progressPct}%</span>
+            </div>
+            <div className="h-2 bg-muted rounded-full overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all bg-gradient-to-r from-green-500 to-emerald-500"
+                style={{ width: `${progressPct}%` }}
+              />
+            </div>
+          </div>
         </div>
         <Button onClick={saveSelections} disabled={saving || selectedVendors.size === 0}>
           {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
@@ -156,18 +170,28 @@ export default function StepMatchVendors() {
       </div>
 
       {/* Status summary */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <button
           onClick={() => setStatusFilter('all')}
           className={cn('rounded-lg border p-3 text-left transition-colors', statusFilter === 'all' ? 'border-primary bg-primary/5' : 'hover:bg-muted/50')}
         >
-          <div className="text-2xl font-bold">{matchableItems.length}</div>
+          <Package className="w-4 h-4 text-muted-foreground mb-1" />
+          <div className="text-2xl font-bold">{totalItems}</div>
+          <p className="text-xs text-muted-foreground">Total Materials</p>
+        </button>
+        <button
+          onClick={() => setStatusFilter('available')}
+          className={cn('rounded-lg border p-3 text-left transition-colors', statusFilter === 'available' ? 'border-gray-500 bg-gray-50 dark:bg-gray-950' : 'hover:bg-muted/50')}
+        >
+          <Users className="w-4 h-4 text-muted-foreground mb-1" />
+          <div className="text-2xl font-bold">{availableItems.length}</div>
           <p className="text-xs text-muted-foreground">Need Vendors</p>
         </button>
         <button
           onClick={() => setStatusFilter('rfq')}
           className={cn('rounded-lg border p-3 text-left transition-colors', statusFilter === 'rfq' ? 'border-blue-500 bg-blue-50 dark:bg-blue-950' : 'hover:bg-muted/50')}
         >
+          <Send className="w-4 h-4 text-blue-500 mb-1" />
           <div className="text-2xl font-bold text-blue-600">{rfqItems.length}</div>
           <p className="text-xs text-muted-foreground">RFQ Sent</p>
         </button>
@@ -175,6 +199,7 @@ export default function StepMatchVendors() {
           onClick={() => setStatusFilter('quoted')}
           className={cn('rounded-lg border p-3 text-left transition-colors', statusFilter === 'quoted' ? 'border-orange-500 bg-orange-50 dark:bg-orange-950' : 'hover:bg-muted/50')}
         >
+          <DollarSign className="w-4 h-4 text-orange-500 mb-1" />
           <div className="text-2xl font-bold text-orange-600">{quotedItems.length}</div>
           <p className="text-xs text-muted-foreground">Quoted</p>
         </button>
@@ -182,6 +207,7 @@ export default function StepMatchVendors() {
           onClick={() => setStatusFilter('awarded')}
           className={cn('rounded-lg border p-3 text-left transition-colors', statusFilter === 'awarded' ? 'border-green-500 bg-green-50 dark:bg-green-950' : 'hover:bg-muted/50')}
         >
+          <Trophy className="w-4 h-4 text-green-500 mb-1" />
           <div className="text-2xl font-bold text-green-600">{awardedItems.length}</div>
           <p className="text-xs text-muted-foreground">Awarded</p>
         </button>
@@ -197,35 +223,45 @@ export default function StepMatchVendors() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
-            {filteredItems.map(item => (
-              <div key={item.id} className="flex items-start justify-between py-2 border-b last:border-0">
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium truncate">{item.description}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {item.finalQty?.toFixed(1)} {item.uom}
-                  </div>
-                  {item.overallStatus !== 'AVAILABLE' && item.rfqs.length > 0 && (
-                    <div className="text-xs text-muted-foreground mt-0.5">
-                      {item.rfqs.map(r => r.vendorName).join(', ')}
+            {filteredItems.map(item => {
+              const cheapestQuote = item.quotes.length > 0
+                ? item.quotes.reduce((best, q) => (q.unitPrice > 0 && q.unitPrice < (best?.unitPrice || Infinity)) ? q : best, null as typeof item.quotes[0] | null)
+                : null;
+              return (
+                <div key={item.id} className="flex items-start justify-between py-2 border-b last:border-0">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium truncate">{item.description}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {item.finalQty?.toFixed(1)} {item.uom}
                     </div>
-                  )}
+                    {cheapestQuote && (
+                      <div className="text-xs text-green-600 mt-0.5">
+                        Best: ${cheapestQuote.unitPrice.toFixed(2)}/{item.uom} ({cheapestQuote.vendorName})
+                      </div>
+                    )}
+                    {!cheapestQuote && item.overallStatus !== 'AVAILABLE' && item.rfqs.length > 0 && (
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        {item.rfqs.map(r => r.vendorName).join(', ')}
+                      </div>
+                    )}
+                  </div>
+                  <div className="ml-2 flex-shrink-0">
+                    {item.overallStatus === 'AVAILABLE' && (
+                      <Badge variant="outline" className="text-xs">Available</Badge>
+                    )}
+                    {item.overallStatus === 'RFQ_SENT' && (
+                      <Badge className="text-xs bg-blue-600 text-white"><Send className="w-3 h-3 mr-1" />RFQ</Badge>
+                    )}
+                    {item.overallStatus === 'QUOTED' && (
+                      <Badge className="text-xs bg-orange-500 text-white"><FileText className="w-3 h-3 mr-1" />Quoted</Badge>
+                    )}
+                    {item.overallStatus === 'AWARDED' && (
+                      <Badge className="text-xs bg-green-600 text-white"><Trophy className="w-3 h-3 mr-1" />Awarded</Badge>
+                    )}
+                  </div>
                 </div>
-                <div className="ml-2 flex-shrink-0">
-                  {item.overallStatus === 'AVAILABLE' && (
-                    <Badge variant="outline" className="text-xs">Available</Badge>
-                  )}
-                  {item.overallStatus === 'RFQ_SENT' && (
-                    <Badge className="text-xs bg-blue-600 text-white"><Send className="w-3 h-3 mr-1" />RFQ</Badge>
-                  )}
-                  {item.overallStatus === 'QUOTED' && (
-                    <Badge className="text-xs bg-orange-500 text-white"><FileText className="w-3 h-3 mr-1" />Quoted</Badge>
-                  )}
-                  {item.overallStatus === 'AWARDED' && (
-                    <Badge className="text-xs bg-green-600 text-white"><Trophy className="w-3 h-3 mr-1" />Awarded</Badge>
-                  )}
-                </div>
-              </div>
-            ))}
+              );
+            })}
             {filteredItems.length === 0 && (
               <p className="text-sm text-muted-foreground text-center py-4">
                 {statusFilter === 'all' ? 'No materials found' : 'No materials with this status'}
