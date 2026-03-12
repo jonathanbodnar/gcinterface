@@ -44,7 +44,26 @@ export default function StepMatchVendors() {
         axios.get(`${API_URL}/projects/${projectId}/selected-vendors`).catch(() => ({ data: { vendors: [] } })),
       ]);
 
-      setBomStatuses(bomStatusRes.data || []);
+      // Consolidate duplicate materials by description + uom
+      const rawStatuses: BOMItemStatus[] = bomStatusRes.data || [];
+      const groups = new Map<string, BOMItemStatus>();
+      for (const item of rawStatuses) {
+        const key = `${(item.description || '').toLowerCase().trim()}||${(item.uom || '').toLowerCase()}`;
+        if (!groups.has(key)) {
+          groups.set(key, { ...item });
+        } else {
+          const existing = groups.get(key)!;
+          existing.finalQty = (existing.finalQty || 0) + (item.finalQty || 0);
+          existing.rfqs = [...existing.rfqs, ...item.rfqs];
+          existing.quotes = [...existing.quotes, ...item.quotes];
+          // Promote status: AWARDED > QUOTED > RFQ_SENT > AVAILABLE
+          const rank = { AWARDED: 3, QUOTED: 2, RFQ_SENT: 1, AVAILABLE: 0 };
+          if (rank[item.overallStatus] > rank[existing.overallStatus]) {
+            existing.overallStatus = item.overallStatus;
+          }
+        }
+      }
+      setBomStatuses(Array.from(groups.values()));
 
       const savedVendors = savedVendorsRes.data?.vendors || [];
       if (savedVendors.length > 0) {
